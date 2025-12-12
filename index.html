@@ -2,52 +2,60 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>智慧水質預測系統 (RFECV整合版)</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>水質預測監控 (RFECV Testing Data)</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        body { font-family: 'Segoe UI', sans-serif; background: #f4f7f6; padding: 20px; }
-        .container { max-width: 1000px; margin: 0 auto; }
-        .card { background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f6f8; margin: 0; padding: 20px; }
+        .container { max-width: 1200px; margin: 0 auto; }
         
-        header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-        h2 { margin: 0; color: #2c3e50; }
+        /* 頂部卡片 */
+        .header-card { background: white; border-radius: 15px; padding: 30px; margin-bottom: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.05); text-align: center; position: relative;}
+        .header-title { display: flex; align-items: center; justify-content: center; gap: 10px; color: #2c3e50; }
+        .select-container { position: absolute; right: 30px; top: 30px; }
+        select { padding: 8px 15px; border-radius: 8px; border: 1px solid #ddd; font-size: 14px; outline: none; }
         
-        select { padding: 10px; font-size: 16px; border-radius: 5px; border: 1px solid #ccc; }
+        .value-display { margin-top: 20px; }
+        .main-value { font-size: 4em; font-weight: bold; color: #2ecc71; margin: 10px 0; }
+        .sub-text { color: #7f8c8d; font-size: 1.1em; }
+        .loading-bar { width: 50px; height: 4px; background: #2ecc71; margin: 0 auto; animation: pulse 1s infinite; }
+        
+        /* 下方圖表區 */
+        .charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .chart-card { background: white; border-radius: 15px; padding: 25px; box-shadow: 0 4px 20px rgba(0,0,0,0.05); height: 400px; }
+        h3 { margin-top: 0; color: #34495e; display: flex; align-items: center; gap: 10px; }
 
-        .metric-box { text-align: center; margin: 20px 0; }
-        .metric-value { font-size: 3em; font-weight: bold; color: #27ae60; }
-        .metric-label { color: #7f8c8d; font-size: 1.2em; }
-
-        .charts-row { display: flex; gap: 20px; flex-wrap: wrap; }
-        .chart-container { flex: 1; min-width: 300px; height: 300px; }
+        @keyframes pulse { 0% { opacity: 0.5; width: 50px; } 50% { opacity: 1; width: 70px; } 100% { opacity: 0.5; width: 50px; } }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <div class="card">
-        <header>
+    <div class="header-card">
+        <div class="select-container">
+            <label>選擇預測目標：</label>
+            <select id="targetSelect">
+                <option value="default">載入中...</option>
+            </select>
+        </div>
+        <div class="header-title">
             <h2>🌊 水質預測監控 (RFECV Testing Data)</h2>
-            <div>
-                <label>選擇預測目標：</label>
-                <select id="targetSelect" onchange="switchTarget()">
-                    <option value="Loading">載入中...</option>
-                </select>
-            </div>
-        </header>
-        <div class="metric-box">
-            <div id="predValue" class="metric-value">--</div>
-            <div class="metric-label">當前預測值 (mg/L)</div>
-            <div id="timestamp" style="font-size: 0.8em; color: #ccc; margin-top: 5px;">Wait...</div>
+        </div>
+        
+        <div class="value-display">
+            <div id="loadingLine" class="loading-bar"></div>
+            <div id="predValue" class="main-value">--</div>
+            <div class="sub-text">當前預測值 (mg/L)</div>
+            <div id="timeLabel" style="color: #bdc3c7; font-size: 0.9em; margin-top: 5px;">Wait...</div>
         </div>
     </div>
 
-    <div class="charts-row">
-        <div class="card chart-container">
+    <div class="charts-grid">
+        <div class="chart-card">
             <h3>📈 預測趨勢 (Time Series)</h3>
             <canvas id="lineChart"></canvas>
         </div>
-        <div class="card chart-container">
+        <div class="chart-card">
             <h3>🧪 Top 5 影響特徵 (數值)</h3>
             <canvas id="barChart"></canvas>
         </div>
@@ -55,63 +63,58 @@
 </div>
 
 <script>
-    const API_URL = "https://elidia-pharmacopoeial-perpendicularly.ngrok-free.dev"; 
-    
+    // ★★★ 請確認這裡填的是新版 API 的 Ngrok 網址 (不要有斜線結尾) ★★★
+    const API_BASE = "https://elidia-pharmacopoeial-perpendicularly.ngrok-free.dev"; 
+
     // 初始化圖表
     const lineCtx = document.getElementById('lineChart').getContext('2d');
     const lineChart = new Chart(lineCtx, {
         type: 'line',
-        data: { labels: [], datasets: [{ label: '預測濃度', data: [], borderColor: '#3498db', tension: 0.4, fill: true, backgroundColor: 'rgba(52, 152, 219, 0.1)' }] },
-        options: { responsive: true, maintainAspectRatio: false, scales: { x: { display: false } } }
+        data: { labels: [], datasets: [{ label: '預測濃度', data: [], borderColor: '#3498db', borderWidth: 2, tension: 0.4, fill: true, backgroundColor: 'rgba(52, 152, 219, 0.05)' }] },
+        options: { responsive: true, maintainAspectRatio: false, scales: { x: { display: false }, y: { beginAtZero: false } }, plugins: { legend: { display: false } } }
     });
 
     const barCtx = document.getElementById('barChart').getContext('2d');
     const barChart = new Chart(barCtx, {
         type: 'bar',
-        data: { labels: [], datasets: [{ label: '特徵數值', data: [], backgroundColor: ['#e74c3c', '#e67e22', '#f1c40f', '#2ecc71', '#1abc9c'] }] },
-        options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false }
+        data: { labels: [], datasets: [{ label: '特徵數值', data: [], backgroundColor: '#e74c3c', borderRadius: 5 }] },
+        options: { indexAxis: 'x', responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }
     });
 
-    // 狀態變數
-    let currentTarget = "";
-    let isInit = false;
-
-    async function fetchData() {
+    async function updateDashboard() {
         try {
-            const res = await fetch(`${API_URL}/api/dashboard/monitor`);
+            const res = await fetch(`${API_BASE}/api/dashboard/monitor`, {
+                headers: { "ngrok-skip-browser-warning": "true" }
+            });
             const data = await res.json();
 
-            // 1. 初始化下拉選單 (只做一次)
-            if (!isInit && data.available_targets.length > 0) {
-                const select = document.getElementById('targetSelect');
-                select.innerHTML = "";
-                data.available_targets.forEach(t => {
-                    const opt = document.createElement('option');
-                    opt.value = t;
-                    opt.text = t;
-                    select.add(opt);
-                });
-                select.value = data.target;
-                currentTarget = data.target;
-                isInit = true;
+            // 如果還在等待數據
+            if (data.timestamp === "Waiting...") return;
+
+            // 1. 更新數值與目標
+            document.getElementById('predValue').innerText = data.value.toFixed(4);
+            document.getElementById('timeLabel').innerText = "最後更新: " + data.timestamp;
+            document.getElementById('loadingLine').style.display = 'none';
+
+            // 更新下拉選單 (顯示當前目標)
+            const select = document.getElementById('targetSelect');
+            if (select.options[0].value === 'default') {
+                select.innerHTML = `<option value="${data.target}">${data.target}</option>`;
             }
 
-            // 2. 更新數值顯示
-            document.getElementById('predValue').innerText = data.value;
-            document.getElementById('timestamp').innerText = "最後更新: " + data.timestamp;
-
-            // 3. 更新折線圖 (如果時間戳記變了)
-            const lastLabel = lineChart.data.labels.slice(-1)[0];
-            if (lastLabel !== data.timestamp) {
+            // 2. 更新折線圖
+            const lastTime = lineChart.data.labels.slice(-1)[0];
+            if (lastTime !== data.timestamp) {
                 lineChart.data.labels.push(data.timestamp);
                 lineChart.data.datasets[0].data.push(data.value);
-                if (lineChart.data.labels.length > 20) {
+                if (lineChart.data.labels.length > 20) { // 只保留最後 20 筆
                     lineChart.data.labels.shift();
                     lineChart.data.datasets[0].data.shift();
                 }
                 lineChart.update();
 
-                // 4. 更新長條圖 (Top 5 特徵)
+                // 3. 更新 Bar Chart (Top 5 Features)
+                // data.top_features 是一個字典 { "Temp": 25.5, "pH": 7.2 ... }
                 const feats = data.top_features;
                 barChart.data.labels = Object.keys(feats);
                 barChart.data.datasets[0].data = Object.values(feats);
@@ -119,31 +122,12 @@
             }
 
         } catch (e) {
-            console.error("API連線失敗", e);
+            console.error("連線錯誤", e);
         }
     }
 
-    async function switchTarget() {
-        const select = document.getElementById('targetSelect');
-        const newTarget = select.value;
-        
-        // 呼叫 API 切換模型
-        await fetch(`${API_URL}/api/config/set_target`, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ target_name: newTarget })
-        });
-
-        // 清空圖表
-        lineChart.data.labels = [];
-        lineChart.data.datasets[0].data = [];
-        lineChart.update();
-        alert(`已切換至 ${newTarget}，測試數據重置中...`);
-    }
-
-    // 每 5 秒更新 (依據你的需求)
-    setInterval(fetchData, 1000); // 前端每秒 polling，但後端數據是每 5 秒產生一筆
+    // 每 1 秒檢查一次 API 更新
+    setInterval(updateDashboard, 1000);
 </script>
-
 </body>
 </html>
