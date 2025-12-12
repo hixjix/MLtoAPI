@@ -87,7 +87,7 @@
     // ★★★ 請確認這裡填的是新版 API 的 Ngrok 網址 (不要有斜線結尾) ★★★
     const API_BASE = "https://elidia-pharmacopoeial-perpendicularly.ngrok-free.dev"; 
 
-    // 初始化折線圖 (Line Chart)
+    // 初始化折線圖
     const lineCtx = document.getElementById('lineChart').getContext('2d');
     const lineChart = new Chart(lineCtx, {
         type: 'line',
@@ -95,8 +95,20 @@
         options: { responsive: true, maintainAspectRatio: false, scales: { x: { display: false }, y: { beginAtZero: false } }, plugins: { legend: { display: false } } }
     });
 
-    // 儲存上一次的時間戳記，避免重複更新畫面
     let lastTimestamp = "";
+
+    // ★新功能：根據特徵名稱判斷單位★
+    function getUnit(name) {
+        // 轉大寫以方便比對 (避免 ec, EC 大小寫問題)
+        const n = name.toUpperCase();
+
+        if (n.includes("EC") || n.includes("COND")) return "μS/cm"; // 電導度
+        if (n.includes("PH")) return ""; // pH 無單位
+        if (n.includes("TEMP") || n.includes("WT")) return "°C"; // 溫度
+        if (n.includes("TURB")) return "NTU"; // 濁度
+        // 預設單位
+        return "mg/L"; 
+    }
 
     async function updateDashboard() {
         try {
@@ -105,13 +117,11 @@
             });
             const data = await res.json();
 
-            // 如果還在等待數據或資料沒變，就不更新
             if (data.timestamp === "Waiting..." || data.timestamp === lastTimestamp) return;
 
-            // 更新最後時間戳記
             lastTimestamp = data.timestamp;
 
-            // 1. 更新大標題數值與目標
+            // 1. 更新大標題
             document.getElementById('predValue').innerText = data.value.toFixed(4);
             document.getElementById('timeLabel').innerText = "最後更新: " + data.timestamp;
             document.getElementById('loadingLine').style.display = 'none';
@@ -121,30 +131,31 @@
                 select.innerHTML = `<option value="${data.target}">${data.target}</option>`;
             }
 
-            // 2. 更新折線圖 (Line Chart)
+            // 2. 更新圖表
             lineChart.data.labels.push(data.timestamp);
             lineChart.data.datasets[0].data.push(data.value);
-            if (lineChart.data.labels.length > 20) { // 只保留最後 20 筆
+            if (lineChart.data.labels.length > 20) {
                 lineChart.data.labels.shift();
                 lineChart.data.datasets[0].data.shift();
             }
             lineChart.update();
 
-            // 3. ★更新列表 (List View)★
+            // 3. ★更新列表 (包含單位判斷)★
             const listContainer = document.getElementById('featureList');
-            listContainer.innerHTML = ""; // 清空舊資料
+            listContainer.innerHTML = ""; 
             
-            // data.top_features 是一個字典: { "Temp": 25.5, "pH": 7.2 ... }
             const features = data.top_features;
             
-            // 遍歷每一個特徵，產生 HTML
             for (const [name, value] of Object.entries(features)) {
+                // 呼叫函式取得正確單位
+                const unit = getUnit(name); 
+
                 const row = document.createElement('div');
                 row.className = 'feature-row';
                 row.innerHTML = `
                     <div class="feat-name">${name}</div>
                     <div class="feat-val">
-                        ${value.toFixed(2)}<span class="unit">mg/L</span>
+                        ${value.toFixed(2)}<span class="unit">${unit}</span>
                     </div>
                 `;
                 listContainer.appendChild(row);
@@ -155,7 +166,6 @@
         }
     }
 
-    // 每 1 秒檢查一次 API 更新
     setInterval(updateDashboard, 1000);
 </script>
 </body>
