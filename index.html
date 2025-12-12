@@ -31,7 +31,7 @@
         .card { background: white; border-radius: 15px; padding: 25px; box-shadow: 0 4px 20px rgba(0,0,0,0.05); height: 400px; overflow-y: auto; }
         h3 { margin-top: 0; color: #34495e; display: flex; align-items: center; gap: 10px; border-bottom: 2px solid #f0f2f5; padding-bottom: 15px; margin-bottom: 15px; }
 
-        /* 特徵列表樣式 (List View) */
+        /* 特徵列表樣式 */
         .feature-row { 
             display: flex; 
             justify-content: space-between; 
@@ -47,7 +47,6 @@
         .feat-val { font-size: 1.2em; font-weight: bold; color: #2c3e50; }
         .unit { font-size: 0.8em; color: #999; margin-left: 5px; font-weight: normal; }
 
-        /* 動畫 */
         @keyframes pulse { 0% { opacity: 0.5; width: 50px; } 50% { opacity: 1; width: 70px; } 100% { opacity: 0.5; width: 50px; } }
     </style>
 </head>
@@ -59,8 +58,8 @@
             <label>選擇預測目標模型：</label>
             <select id="targetSelect" onchange="switchTarget()">
                 <option value="NH4_1209">NH4_1209 (氨氮)</option>
-                <option value="RPI_1208">RPI_1208 </option>
-                <option value="SS_1206">SS_1206 </option>
+                <option value="RPI_1208">RPI_1208 (河川污染指數)</option>
+                <option value="SS_1206">SS_1206 (懸浮固體)</option>
             </select>
         </div>
 
@@ -71,7 +70,7 @@
         <div class="value-display">
             <div id="loadingLine" class="loading-bar"></div>
             <div id="predValue" class="main-value">--</div>
-            <div class="sub-text">當前預測值 (mg/L)</div>
+            <div class="sub-text">當前預測值 (<span id="targetUnitDisplay">mg/L</span>)</div>
             <div id="timeLabel" style="color: #bdc3c7; font-size: 0.9em; margin-top: 5px;">等待連線中...</div>
         </div>
     </div>
@@ -97,16 +96,15 @@
     // ==========================================
     // ★★★ 請修改這裡：填入您的 API Ngrok 網址 ★★★
     // ==========================================
-    const API_BASE = "https://elidia-pharmacopoeial-perpendicularly.ngrok-free.dev"; // 注意：後面不要有斜線
+    const API_BASE = "https://xxxx-xxxx.ngrok-free.app"; // 注意：後面不要有斜線
 
-    // 初始化左側折線圖
     const lineCtx = document.getElementById('lineChart').getContext('2d');
     const lineChart = new Chart(lineCtx, {
         type: 'line',
         data: { 
             labels: [], 
             datasets: [{ 
-                label: '預測濃度', 
+                label: '預測數值', 
                 data: [], 
                 borderColor: '#3498db', 
                 borderWidth: 2, 
@@ -120,29 +118,40 @@
             maintainAspectRatio: false, 
             scales: { x: { display: false }, y: { beginAtZero: false } }, 
             plugins: { legend: { display: false } },
-            animation: false // 關閉動畫以提升效能
+            animation: false 
         }
     });
 
     let lastTimestamp = "";
 
-    // 輔助函式：判斷單位
-    function getUnit(name) {
+    // ★ 1. 判斷特徵 (小項目) 的單位
+    function getFeatureUnit(name) {
         const n = name.toUpperCase();
         if (n.includes("EC") || n.includes("COND")) return "μS/cm";
         if (n.includes("PH")) return "";
         if (n.includes("TEMP") || n.includes("WT")) return "°C";
         if (n.includes("TURB")) return "NTU";
-        return "mg/L"; // 預設單位
+        return "mg/L";
     }
 
-    // 功能：切換目標模型 (呼叫 API)
+    // ★ 2. 判斷目標 (大標題) 的單位
+    function getTargetUnit(targetName) {
+        const t = targetName.toUpperCase();
+        // 如果是 RPI (指數)，通常沒有單位或稱為 "Score"
+        if (t.includes("RPI")) return "Index"; 
+        // 如果是導電度
+        if (t.includes("EC")) return "μS/cm";
+        // 如果是濁度
+        if (t.includes("TURBIDITY")) return "NTU";
+        // 預設 (NH4, SS, COD, BOD 都是 mg/L)
+        return "mg/L";
+    }
+
     async function switchTarget() {
         const select = document.getElementById('targetSelect');
         const newTarget = select.value;
         
         try {
-            // 通知 API 更新目標設定
             await fetch(`${API_BASE}/api/config/set_target`, {
                 method: 'POST',
                 headers: { 
@@ -152,7 +161,6 @@
                 body: JSON.stringify({ target_name: newTarget })
             });
             
-            // 重置畫面，給使用者反饋
             lineChart.data.labels = [];
             lineChart.data.datasets[0].data = [];
             lineChart.update();
@@ -160,6 +168,9 @@
             document.getElementById('predValue').innerText = "--";
             document.getElementById('predValue').style.color = "#ccc";
             
+            // ★ 切換時順便更新單位顯示 (給使用者立即回饋)
+            document.getElementById('targetUnitDisplay').innerText = getTargetUnit(newTarget);
+
             console.log("已切換至:", newTarget);
         } catch (e) {
             console.error("切換失敗", e);
@@ -167,7 +178,6 @@
         }
     }
 
-    // 主迴圈：每秒更新畫面
     async function updateDashboard() {
         try {
             const res = await fetch(`${API_BASE}/api/dashboard/monitor`, {
@@ -175,41 +185,38 @@
             });
             const data = await res.json();
 
-            // 如果數據沒變或還在等待，就不更新 DOM
             if (data.timestamp === "Waiting..." || data.timestamp === lastTimestamp) return;
             lastTimestamp = data.timestamp;
 
-            // 1. 更新大標題數值
+            // 更新數值
             document.getElementById('predValue').innerText = data.value.toFixed(4);
-            document.getElementById('predValue').style.color = "#2ecc71"; // 恢復綠色
+            document.getElementById('predValue').style.color = "#2ecc71";
             document.getElementById('timeLabel').innerText = "最後更新: " + data.timestamp;
             document.getElementById('loadingLine').style.display = 'none';
+            
+            // ★ 收到數據後，再次確認並更新大標題的單位
+            document.getElementById('targetUnitDisplay').innerText = getTargetUnit(data.target);
 
-            // 2. 同步下拉選單 (防止多人操作時狀態不同步)
             const select = document.getElementById('targetSelect');
             if (select.value !== data.target && data.target !== "--") {
                 select.value = data.target;
             }
 
-            // 3. 更新折線圖
             lineChart.data.labels.push(data.timestamp);
             lineChart.data.datasets[0].data.push(data.value);
-            // 只保留最後 20 筆
             if (lineChart.data.labels.length > 20) {
                 lineChart.data.labels.shift();
                 lineChart.data.datasets[0].data.shift();
             }
             lineChart.update();
 
-            // 4. 更新右側列表 (List View)
             const listContainer = document.getElementById('featureList');
-            listContainer.innerHTML = ""; // 清空舊列表
+            listContainer.innerHTML = ""; 
             
             const features = data.top_features;
             
-            // 遍歷特徵字典，產生列表項目
             for (const [name, value] of Object.entries(features)) {
-                const unit = getUnit(name); 
+                const unit = getFeatureUnit(name); 
                 const row = document.createElement('div');
                 row.className = 'feature-row';
                 row.innerHTML = `
@@ -227,7 +234,6 @@
         }
     }
 
-    // 啟動定時器 (每 1000 毫秒執行一次)
     setInterval(updateDashboard, 1000);
 </script>
 </body>
