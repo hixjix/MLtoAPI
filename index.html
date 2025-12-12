@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>智慧水質預測系統 (RFECV整合版)</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background: #f4f7f6; padding: 20px; }
+        .container { max-width: 1000px; margin: 0 auto; }
+        .card { background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        
+        header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        h2 { margin: 0; color: #2c3e50; }
+        
+        select { padding: 10px; font-size: 16px; border-radius: 5px; border: 1px solid #ccc; }
+
+        .metric-box { text-align: center; margin: 20px 0; }
+        .metric-value { font-size: 3em; font-weight: bold; color: #27ae60; }
+        .metric-label { color: #7f8c8d; font-size: 1.2em; }
+
+        .charts-row { display: flex; gap: 20px; flex-wrap: wrap; }
+        .chart-container { flex: 1; min-width: 300px; height: 300px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="card">
+        <header>
+            <h2>🌊 水質預測監控 (RFECV Testing Data)</h2>
+            <div>
+                <label>選擇預測目標：</label>
+                <select id="targetSelect" onchange="switchTarget()">
+                    <option value="Loading">載入中...</option>
+                </select>
+            </div>
+        </header>
+        <div class="metric-box">
+            <div id="predValue" class="metric-value">--</div>
+            <div class="metric-label">當前預測值 (mg/L)</div>
+            <div id="timestamp" style="font-size: 0.8em; color: #ccc; margin-top: 5px;">Wait...</div>
+        </div>
+    </div>
+
+    <div class="charts-row">
+        <div class="card chart-container">
+            <h3>📈 預測趨勢 (Time Series)</h3>
+            <canvas id="lineChart"></canvas>
+        </div>
+        <div class="card chart-container">
+            <h3>🧪 Top 5 影響特徵 (數值)</h3>
+            <canvas id="barChart"></canvas>
+        </div>
+    </div>
+</div>
+
+<script>
+    const API_URL = "http://127.0.0.1:8000"; 
+    
+    // 初始化圖表
+    const lineCtx = document.getElementById('lineChart').getContext('2d');
+    const lineChart = new Chart(lineCtx, {
+        type: 'line',
+        data: { labels: [], datasets: [{ label: '預測濃度', data: [], borderColor: '#3498db', tension: 0.4, fill: true, backgroundColor: 'rgba(52, 152, 219, 0.1)' }] },
+        options: { responsive: true, maintainAspectRatio: false, scales: { x: { display: false } } }
+    });
+
+    const barCtx = document.getElementById('barChart').getContext('2d');
+    const barChart = new Chart(barCtx, {
+        type: 'bar',
+        data: { labels: [], datasets: [{ label: '特徵數值', data: [], backgroundColor: ['#e74c3c', '#e67e22', '#f1c40f', '#2ecc71', '#1abc9c'] }] },
+        options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false }
+    });
+
+    // 狀態變數
+    let currentTarget = "";
+    let isInit = false;
+
+    async function fetchData() {
+        try {
+            const res = await fetch(`${API_URL}/api/dashboard/monitor`);
+            const data = await res.json();
+
+            // 1. 初始化下拉選單 (只做一次)
+            if (!isInit && data.available_targets.length > 0) {
+                const select = document.getElementById('targetSelect');
+                select.innerHTML = "";
+                data.available_targets.forEach(t => {
+                    const opt = document.createElement('option');
+                    opt.value = t;
+                    opt.text = t;
+                    select.add(opt);
+                });
+                select.value = data.target;
+                currentTarget = data.target;
+                isInit = true;
+            }
+
+            // 2. 更新數值顯示
+            document.getElementById('predValue').innerText = data.value;
+            document.getElementById('timestamp').innerText = "最後更新: " + data.timestamp;
+
+            // 3. 更新折線圖 (如果時間戳記變了)
+            const lastLabel = lineChart.data.labels.slice(-1)[0];
+            if (lastLabel !== data.timestamp) {
+                lineChart.data.labels.push(data.timestamp);
+                lineChart.data.datasets[0].data.push(data.value);
+                if (lineChart.data.labels.length > 20) {
+                    lineChart.data.labels.shift();
+                    lineChart.data.datasets[0].data.shift();
+                }
+                lineChart.update();
+
+                // 4. 更新長條圖 (Top 5 特徵)
+                const feats = data.top_features;
+                barChart.data.labels = Object.keys(feats);
+                barChart.data.datasets[0].data = Object.values(feats);
+                barChart.update();
+            }
+
+        } catch (e) {
+            console.error("API連線失敗", e);
+        }
+    }
+
+    async function switchTarget() {
+        const select = document.getElementById('targetSelect');
+        const newTarget = select.value;
+        
+        // 呼叫 API 切換模型
+        await fetch(`${API_URL}/api/config/set_target`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ target_name: newTarget })
+        });
+
+        // 清空圖表
+        lineChart.data.labels = [];
+        lineChart.data.datasets[0].data = [];
+        lineChart.update();
+        alert(`已切換至 ${newTarget}，測試數據重置中...`);
+    }
+
+    // 每 5 秒更新 (依據你的需求)
+    setInterval(fetchData, 1000); // 前端每秒 polling，但後端數據是每 5 秒產生一筆
+</script>
+
+</body>
+</html>
