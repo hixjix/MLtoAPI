@@ -3,29 +3,35 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>水質預測監控 (RFECV List View)</title>
+    <title>AIoT 水質預測監控中心</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
+        /* 全域設定 */
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f6f8; margin: 0; padding: 20px; }
         .container { max-width: 1200px; margin: 0 auto; }
         
-        /* 頂部卡片 */
+        /* 上方標頭卡片 */
         .header-card { background: white; border-radius: 15px; padding: 30px; margin-bottom: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.05); text-align: center; position: relative;}
         .header-title { display: flex; align-items: center; justify-content: center; gap: 10px; color: #2c3e50; }
-        .select-container { position: absolute; right: 30px; top: 30px; }
-        select { padding: 8px 15px; border-radius: 8px; border: 1px solid #ddd; font-size: 14px; outline: none; }
         
+        /* 下拉選單樣式 */
+        .select-container { position: absolute; right: 30px; top: 30px; text-align: left; }
+        .select-container label { display: block; font-size: 0.8em; color: #7f8c8d; margin-bottom: 5px; }
+        select { padding: 8px 15px; border-radius: 8px; border: 1px solid #ddd; font-size: 14px; outline: none; background: #fff; cursor: pointer; }
+        select:hover { border-color: #3498db; }
+
+        /* 數值顯示區 */
         .value-display { margin-top: 20px; }
-        .main-value { font-size: 4em; font-weight: bold; color: #2ecc71; margin: 10px 0; }
+        .main-value { font-size: 4em; font-weight: bold; color: #2ecc71; margin: 10px 0; transition: color 0.3s; }
         .sub-text { color: #7f8c8d; font-size: 1.1em; }
         .loading-bar { width: 50px; height: 4px; background: #2ecc71; margin: 0 auto; animation: pulse 1s infinite; }
         
-        /* 下方區塊 */
+        /* 下方圖表與列表區塊 */
         .charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
         .card { background: white; border-radius: 15px; padding: 25px; box-shadow: 0 4px 20px rgba(0,0,0,0.05); height: 400px; overflow-y: auto; }
         h3 { margin-top: 0; color: #34495e; display: flex; align-items: center; gap: 10px; border-bottom: 2px solid #f0f2f5; padding-bottom: 15px; margin-bottom: 15px; }
 
-        /* ★新功能：列表樣式★ */
+        /* 特徵列表樣式 (List View) */
         .feature-row { 
             display: flex; 
             justify-content: space-between; 
@@ -41,6 +47,7 @@
         .feat-val { font-size: 1.2em; font-weight: bold; color: #2c3e50; }
         .unit { font-size: 0.8em; color: #999; margin-left: 5px; font-weight: normal; }
 
+        /* 動畫 */
         @keyframes pulse { 0% { opacity: 0.5; width: 50px; } 50% { opacity: 1; width: 70px; } 100% { opacity: 0.5; width: 50px; } }
     </style>
 </head>
@@ -49,11 +56,13 @@
 <div class="container">
     <div class="header-card">
         <div class="select-container">
-            <label>選擇預測目標：</label>
-            <select id="targetSelect">
-                <option value="default">載入中...</option>
+            <label>選擇預測目標模型：</label>
+            <select id="targetSelect" onchange="switchTarget()">
+                <option value="NH4_1209">NH4_1209 (氨氮)</option>
+                <option value="COD_Demo">COD_Demo (示範目標)</option>
             </select>
         </div>
+
         <div class="header-title">
             <h2>🌊 水質預測監控 (RFECV Testing Data)</h2>
         </div>
@@ -62,7 +71,7 @@
             <div id="loadingLine" class="loading-bar"></div>
             <div id="predValue" class="main-value">--</div>
             <div class="sub-text">當前預測值 (mg/L)</div>
-            <div id="timeLabel" style="color: #bdc3c7; font-size: 0.9em; margin-top: 5px;">Wait...</div>
+            <div id="timeLabel" style="color: #bdc3c7; font-size: 0.9em; margin-top: 5px;">等待連線中...</div>
         </div>
     </div>
 
@@ -75,7 +84,7 @@
         </div>
         
         <div class="card">
-            <h3>🧪 Top 5 影響特徵 (數值)</h3>
+            <h3>🧪 Top 5 影響特徵 (即時數值)</h3>
             <div id="featureList">
                 <div style="text-align:center; color:#ccc; margin-top: 50px;">等待數據中...</div>
             </div>
@@ -84,32 +93,80 @@
 </div>
 
 <script>
-    // ★★★ 請確認這裡填的是新版 API 的 Ngrok 網址 (不要有斜線結尾) ★★★
-    const API_BASE = "https://elidia-pharmacopoeial-perpendicularly.ngrok-free.dev"; 
+    // ==========================================
+    // ★★★ 請修改這裡：填入您的 API Ngrok 網址 ★★★
+    // ==========================================
+    const API_BASE = "https://elidia-pharmacopoeial-perpendicularly.ngrok-free.dev"; // 注意：後面不要有斜線
 
-    // 初始化折線圖
+    [cite_start]// 初始化左側折線圖 [cite: 56]
     const lineCtx = document.getElementById('lineChart').getContext('2d');
     const lineChart = new Chart(lineCtx, {
         type: 'line',
-        data: { labels: [], datasets: [{ label: '預測濃度', data: [], borderColor: '#3498db', borderWidth: 2, tension: 0.4, fill: true, backgroundColor: 'rgba(52, 152, 219, 0.05)' }] },
-        options: { responsive: true, maintainAspectRatio: false, scales: { x: { display: false }, y: { beginAtZero: false } }, plugins: { legend: { display: false } } }
+        data: { 
+            labels: [], 
+            datasets: [{ 
+                label: '預測濃度', 
+                data: [], 
+                borderColor: '#3498db', 
+                borderWidth: 2, 
+                tension: 0.4, 
+                fill: true, 
+                backgroundColor: 'rgba(52, 152, 219, 0.05)' 
+            }] 
+        },
+        options: { 
+            responsive: true, 
+            maintainAspectRatio: false, 
+            scales: { x: { display: false }, y: { beginAtZero: false } }, 
+            plugins: { legend: { display: false } },
+            animation: false // 關閉動畫以提升效能
+        }
     });
 
     let lastTimestamp = "";
 
-    // ★新功能：根據特徵名稱判斷單位★
+    // 輔助函式：判斷單位
     function getUnit(name) {
-        // 轉大寫以方便比對 (避免 ec, EC 大小寫問題)
         const n = name.toUpperCase();
-
-        if (n.includes("EC") || n.includes("COND")) return "μS/cm"; // 電導度
-        if (n.includes("PH")) return ""; // pH 無單位
-        if (n.includes("TEMP") || n.includes("WT")) return "°C"; // 溫度
-        if (n.includes("TURB")) return "NTU"; // 濁度
-        // 預設單位
-        return "mg/L"; 
+        if (n.includes("EC") || n.includes("COND")) return "μS/cm";
+        if (n.includes("PH")) return "";
+        if (n.includes("TEMP") || n.includes("WT")) return "°C";
+        if (n.includes("TURB")) return "NTU";
+        return "mg/L"; // 預設單位
     }
 
+    // 功能：切換目標模型 (呼叫 API)
+    async function switchTarget() {
+        const select = document.getElementById('targetSelect');
+        const newTarget = select.value;
+        
+        try {
+            // 通知 API 更新目標設定
+            await fetch(`${API_BASE}/api/config/set_target`, {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    "ngrok-skip-browser-warning": "true"
+                },
+                body: JSON.stringify({ target_name: newTarget })
+            });
+            
+            // 重置畫面，給使用者反饋
+            lineChart.data.labels = [];
+            lineChart.data.datasets[0].data = [];
+            lineChart.update();
+            document.getElementById('featureList').innerHTML = '<div style="text-align:center;color:#ccc;margin-top:50px;">🔄 模型切換中...</div>';
+            document.getElementById('predValue').innerText = "--";
+            document.getElementById('predValue').style.color = "#ccc";
+            
+            console.log("已切換至:", newTarget);
+        } catch (e) {
+            console.error("切換失敗", e);
+            alert("切換失敗，請確認 API 連線是否正常");
+        }
+    }
+
+    // 主迴圈：每秒更新畫面
     async function updateDashboard() {
         try {
             const res = await fetch(`${API_BASE}/api/dashboard/monitor`, {
@@ -117,39 +174,41 @@
             });
             const data = await res.json();
 
+            // 如果數據沒變或還在等待，就不更新 DOM
             if (data.timestamp === "Waiting..." || data.timestamp === lastTimestamp) return;
-
             lastTimestamp = data.timestamp;
 
-            // 1. 更新大標題
+            [cite_start]// 1. 更新大標題數值 [cite: 62]
             document.getElementById('predValue').innerText = data.value.toFixed(4);
+            document.getElementById('predValue').style.color = "#2ecc71"; // 恢復綠色
             document.getElementById('timeLabel').innerText = "最後更新: " + data.timestamp;
             document.getElementById('loadingLine').style.display = 'none';
 
+            // 2. 同步下拉選單 (防止多人操作時狀態不同步)
             const select = document.getElementById('targetSelect');
-            if (select.options[0].value === 'default') {
-                select.innerHTML = `<option value="${data.target}">${data.target}</option>`;
+            if (select.value !== data.target && data.target !== "--") {
+                select.value = data.target;
             }
 
-            // 2. 更新圖表
+            [cite_start]// 3. 更新折線圖 [cite: 68]
             lineChart.data.labels.push(data.timestamp);
             lineChart.data.datasets[0].data.push(data.value);
+            // 只保留最後 20 筆
             if (lineChart.data.labels.length > 20) {
                 lineChart.data.labels.shift();
                 lineChart.data.datasets[0].data.shift();
             }
             lineChart.update();
 
-            // 3. ★更新列表 (包含單位判斷)★
+            // 4. 更新右側列表 (List View)
             const listContainer = document.getElementById('featureList');
-            listContainer.innerHTML = ""; 
+            listContainer.innerHTML = ""; // 清空舊列表
             
             const features = data.top_features;
             
+            // 遍歷特徵字典，產生列表項目
             for (const [name, value] of Object.entries(features)) {
-                // 呼叫函式取得正確單位
                 const unit = getUnit(name); 
-
                 const row = document.createElement('div');
                 row.className = 'feature-row';
                 row.innerHTML = `
@@ -163,9 +222,11 @@
 
         } catch (e) {
             console.error("連線錯誤", e);
+            document.getElementById('timeLabel').innerText = "連線中斷...";
         }
     }
 
+    [cite_start]// 啟動定時器 (每 1000 毫秒執行一次) [cite: 72]
     setInterval(updateDashboard, 1000);
 </script>
 </body>
