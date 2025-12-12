@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>水質預測監控 (RFECV Testing Data)</title>
+    <title>水質預測監控 (RFECV List View)</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f6f8; margin: 0; padding: 20px; }
@@ -20,10 +20,26 @@
         .sub-text { color: #7f8c8d; font-size: 1.1em; }
         .loading-bar { width: 50px; height: 4px; background: #2ecc71; margin: 0 auto; animation: pulse 1s infinite; }
         
-        /* 下方圖表區 */
+        /* 下方區塊 */
         .charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-        .chart-card { background: white; border-radius: 15px; padding: 25px; box-shadow: 0 4px 20px rgba(0,0,0,0.05); height: 400px; }
-        h3 { margin-top: 0; color: #34495e; display: flex; align-items: center; gap: 10px; }
+        .card { background: white; border-radius: 15px; padding: 25px; box-shadow: 0 4px 20px rgba(0,0,0,0.05); height: 400px; overflow-y: auto; }
+        h3 { margin-top: 0; color: #34495e; display: flex; align-items: center; gap: 10px; border-bottom: 2px solid #f0f2f5; padding-bottom: 15px; margin-bottom: 15px; }
+
+        /* ★新功能：列表樣式★ */
+        .feature-row { 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center;
+            padding: 15px 10px; 
+            border-bottom: 1px solid #eee; 
+            transition: background 0.2s;
+        }
+        .feature-row:last-child { border-bottom: none; }
+        .feature-row:hover { background-color: #f9f9f9; }
+        
+        .feat-name { font-size: 1.1em; font-weight: 600; color: #555; }
+        .feat-val { font-size: 1.2em; font-weight: bold; color: #2c3e50; }
+        .unit { font-size: 0.8em; color: #999; margin-left: 5px; font-weight: normal; }
 
         @keyframes pulse { 0% { opacity: 0.5; width: 50px; } 50% { opacity: 1; width: 70px; } 100% { opacity: 0.5; width: 50px; } }
     </style>
@@ -51,22 +67,27 @@
     </div>
 
     <div class="charts-grid">
-        <div class="chart-card">
+        <div class="card">
             <h3>📈 預測趨勢 (Time Series)</h3>
-            <canvas id="lineChart"></canvas>
+            <div style="height: 320px;">
+                <canvas id="lineChart"></canvas>
+            </div>
         </div>
-        <div class="chart-card">
+        
+        <div class="card">
             <h3>🧪 Top 5 影響特徵 (數值)</h3>
-            <canvas id="barChart"></canvas>
+            <div id="featureList">
+                <div style="text-align:center; color:#ccc; margin-top: 50px;">等待數據中...</div>
+            </div>
         </div>
     </div>
 </div>
 
 <script>
     // ★★★ 請確認這裡填的是新版 API 的 Ngrok 網址 (不要有斜線結尾) ★★★
-    const API_BASE = "https://elidia-pharmacopoeial-perpendicularly.ngrok-free.dev"; 
+    const API_BASE = "https://xxxx-xxxx.ngrok-free.app"; 
 
-    // 初始化圖表
+    // 初始化折線圖 (Line Chart)
     const lineCtx = document.getElementById('lineChart').getContext('2d');
     const lineChart = new Chart(lineCtx, {
         type: 'line',
@@ -74,12 +95,8 @@
         options: { responsive: true, maintainAspectRatio: false, scales: { x: { display: false }, y: { beginAtZero: false } }, plugins: { legend: { display: false } } }
     });
 
-    const barCtx = document.getElementById('barChart').getContext('2d');
-    const barChart = new Chart(barCtx, {
-        type: 'bar',
-        data: { labels: [], datasets: [{ label: '特徵數值', data: [], backgroundColor: '#e74c3c', borderRadius: 5 }] },
-        options: { indexAxis: 'x', responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } }
-    });
+    // 儲存上一次的時間戳記，避免重複更新畫面
+    let lastTimestamp = "";
 
     async function updateDashboard() {
         try {
@@ -88,37 +105,49 @@
             });
             const data = await res.json();
 
-            // 如果還在等待數據
-            if (data.timestamp === "Waiting...") return;
+            // 如果還在等待數據或資料沒變，就不更新
+            if (data.timestamp === "Waiting..." || data.timestamp === lastTimestamp) return;
 
-            // 1. 更新數值與目標
+            // 更新最後時間戳記
+            lastTimestamp = data.timestamp;
+
+            // 1. 更新大標題數值與目標
             document.getElementById('predValue').innerText = data.value.toFixed(4);
             document.getElementById('timeLabel').innerText = "最後更新: " + data.timestamp;
             document.getElementById('loadingLine').style.display = 'none';
 
-            // 更新下拉選單 (顯示當前目標)
             const select = document.getElementById('targetSelect');
             if (select.options[0].value === 'default') {
                 select.innerHTML = `<option value="${data.target}">${data.target}</option>`;
             }
 
-            // 2. 更新折線圖
-            const lastTime = lineChart.data.labels.slice(-1)[0];
-            if (lastTime !== data.timestamp) {
-                lineChart.data.labels.push(data.timestamp);
-                lineChart.data.datasets[0].data.push(data.value);
-                if (lineChart.data.labels.length > 20) { // 只保留最後 20 筆
-                    lineChart.data.labels.shift();
-                    lineChart.data.datasets[0].data.shift();
-                }
-                lineChart.update();
+            // 2. 更新折線圖 (Line Chart)
+            lineChart.data.labels.push(data.timestamp);
+            lineChart.data.datasets[0].data.push(data.value);
+            if (lineChart.data.labels.length > 20) { // 只保留最後 20 筆
+                lineChart.data.labels.shift();
+                lineChart.data.datasets[0].data.shift();
+            }
+            lineChart.update();
 
-                // 3. 更新 Bar Chart (Top 5 Features)
-                // data.top_features 是一個字典 { "Temp": 25.5, "pH": 7.2 ... }
-                const feats = data.top_features;
-                barChart.data.labels = Object.keys(feats);
-                barChart.data.datasets[0].data = Object.values(feats);
-                barChart.update();
+            // 3. ★更新列表 (List View)★
+            const listContainer = document.getElementById('featureList');
+            listContainer.innerHTML = ""; // 清空舊資料
+            
+            // data.top_features 是一個字典: { "Temp": 25.5, "pH": 7.2 ... }
+            const features = data.top_features;
+            
+            // 遍歷每一個特徵，產生 HTML
+            for (const [name, value] of Object.entries(features)) {
+                const row = document.createElement('div');
+                row.className = 'feature-row';
+                row.innerHTML = `
+                    <div class="feat-name">${name}</div>
+                    <div class="feat-val">
+                        ${value.toFixed(2)}<span class="unit">mg/L</span>
+                    </div>
+                `;
+                listContainer.appendChild(row);
             }
 
         } catch (e) {
