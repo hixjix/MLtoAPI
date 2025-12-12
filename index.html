@@ -156,4 +156,79 @@
             lineChart.data.labels = [];
             lineChart.data.datasets[0].data = [];
             lineChart.update();
-            document.getElementById('featureList').innerHTML = '<div style="text-align:center;color:#
+            document.getElementById('featureList').innerHTML = '<div style="text-align:center;color:#ccc;margin-top:50px;">🔄 模型切換中...</div>';
+            document.getElementById('predValue').innerText = "--";
+            document.getElementById('predValue').style.color = "#ccc";
+            
+            console.log("已切換至:", newTarget);
+        } catch (e) {
+            console.error("切換失敗", e);
+            alert("切換失敗，請確認 API 連線是否正常");
+        }
+    }
+
+    // 主迴圈：每秒更新畫面
+    async function updateDashboard() {
+        try {
+            const res = await fetch(`${API_BASE}/api/dashboard/monitor`, {
+                headers: { "ngrok-skip-browser-warning": "true" }
+            });
+            const data = await res.json();
+
+            // 如果數據沒變或還在等待，就不更新 DOM
+            if (data.timestamp === "Waiting..." || data.timestamp === lastTimestamp) return;
+            lastTimestamp = data.timestamp;
+
+            // 1. 更新大標題數值
+            document.getElementById('predValue').innerText = data.value.toFixed(4);
+            document.getElementById('predValue').style.color = "#2ecc71"; // 恢復綠色
+            document.getElementById('timeLabel').innerText = "最後更新: " + data.timestamp;
+            document.getElementById('loadingLine').style.display = 'none';
+
+            // 2. 同步下拉選單 (防止多人操作時狀態不同步)
+            const select = document.getElementById('targetSelect');
+            if (select.value !== data.target && data.target !== "--") {
+                select.value = data.target;
+            }
+
+            // 3. 更新折線圖
+            lineChart.data.labels.push(data.timestamp);
+            lineChart.data.datasets[0].data.push(data.value);
+            // 只保留最後 20 筆
+            if (lineChart.data.labels.length > 20) {
+                lineChart.data.labels.shift();
+                lineChart.data.datasets[0].data.shift();
+            }
+            lineChart.update();
+
+            // 4. 更新右側列表 (List View)
+            const listContainer = document.getElementById('featureList');
+            listContainer.innerHTML = ""; // 清空舊列表
+            
+            const features = data.top_features;
+            
+            // 遍歷特徵字典，產生列表項目
+            for (const [name, value] of Object.entries(features)) {
+                const unit = getUnit(name); 
+                const row = document.createElement('div');
+                row.className = 'feature-row';
+                row.innerHTML = `
+                    <div class="feat-name">${name}</div>
+                    <div class="feat-val">
+                        ${value.toFixed(2)}<span class="unit">${unit}</span>
+                    </div>
+                `;
+                listContainer.appendChild(row);
+            }
+
+        } catch (e) {
+            console.error("連線錯誤", e);
+            document.getElementById('timeLabel').innerText = "連線中斷...";
+        }
+    }
+
+    // 啟動定時器 (每 1000 毫秒執行一次)
+    setInterval(updateDashboard, 1000);
+</script>
+</body>
+</html>
