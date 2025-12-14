@@ -3,235 +3,265 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AIoT 水質預測監控中心</title>
+    <title>AIoT 智慧水質分析平台</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/moment"></script> <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-moment"></script>
     <style>
-        /* 全域設定 */
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f6f8; margin: 0; padding: 20px; }
-        .container { max-width: 1200px; margin: 0 auto; }
+        body { font-family: 'Segoe UI', Tahoma, sans-serif; background-color: #f4f6f8; margin: 0; padding: 20px; }
+        .container { max-width: 1200px; margin: 0 auto; display: grid; grid-template-columns: 2fr 1fr; gap: 20px; }
         
-        /* 上方標頭卡片 */
-        .header-card { background: white; border-radius: 15px; padding: 30px; margin-bottom: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.05); text-align: center; position: relative;}
-        .header-title { display: flex; align-items: center; justify-content: center; gap: 10px; color: #2c3e50; }
+        /* 標頭跨欄 */
+        .header-card { grid-column: 1 / -1; background: white; border-radius: 15px; padding: 25px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); text-align: center; position: relative;}
         
-        /* 下拉選單樣式 */
-        .select-container { position: absolute; right: 30px; top: 30px; text-align: left; }
-        .select-container label { display: block; font-size: 0.8em; color: #7f8c8d; margin-bottom: 5px; }
-        select { padding: 8px 15px; border-radius: 8px; border: 1px solid #ddd; font-size: 14px; outline: none; background: #fff; cursor: pointer; }
-        select:hover { border-color: #3498db; }
+        /* 卡片樣式 */
+        .card { background: white; border-radius: 15px; padding: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+        .full-width { grid-column: 1 / -1; }
+        
+        h3 { color: #2c3e50; border-bottom: 2px solid #f0f2f5; padding-bottom: 10px; margin-top: 0; font-size: 1.1em; }
+        
+        /* 數值顯示 */
+        .main-value { font-size: 3.5em; font-weight: bold; color: #2ecc71; margin: 10px 0; }
+        .sub-text { color: #7f8c8d; }
+        
+        /* 列表樣式 */
+        .feature-row { display: flex; justify-content: space-between; padding: 12px 5px; border-bottom: 1px solid #eee; }
+        .feat-name { font-weight: 600; color: #555; }
+        .feat-val { font-weight: bold; color: #2c3e50; }
+        
+        /* 輸入控制項 */
+        .control-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; color: #666; font-size: 0.9em; }
+        select, input[type="date"] { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px; box-sizing: border-box; }
+        button { width: 100%; padding: 10px; background: #3498db; color: white; border: none; border-radius: 5px; cursor: pointer; transition: 0.3s; }
+        button:hover { background: #2980b9; }
+        button:disabled { background: #bdc3c7; cursor: not-allowed; }
 
-        /* 數值顯示區 */
-        .value-display { margin-top: 20px; }
-        .main-value { font-size: 4em; font-weight: bold; color: #2ecc71; margin: 10px 0; transition: color 0.3s; }
-        .sub-text { color: #7f8c8d; font-size: 1.1em; }
-        .loading-bar { width: 50px; height: 4px; background: #2ecc71; margin: 0 auto; animation: pulse 1s infinite; }
-        
-        /* 下方圖表與列表區塊 */
-        .charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-        .card { background: white; border-radius: 15px; padding: 25px; box-shadow: 0 4px 20px rgba(0,0,0,0.05); height: 400px; overflow-y: auto; }
-        h3 { margin-top: 0; color: #34495e; display: flex; align-items: center; gap: 10px; border-bottom: 2px solid #f0f2f5; padding-bottom: 15px; margin-bottom: 15px; }
-
-        /* 特徵列表樣式 */
-        .feature-row { 
-            display: flex; 
-            justify-content: space-between; 
-            align-items: center;
-            padding: 15px 10px; 
-            border-bottom: 1px solid #eee; 
-            transition: background 0.2s;
-        }
-        .feature-row:last-child { border-bottom: none; }
-        .feature-row:hover { background-color: #f9f9f9; }
-        
-        .feat-name { font-size: 1.1em; font-weight: 600; color: #555; }
-        .feat-val { font-size: 1.2em; font-weight: bold; color: #2c3e50; }
-        .unit { font-size: 0.8em; color: #999; margin-left: 5px; font-weight: normal; }
-
-        @keyframes pulse { 0% { opacity: 0.5; width: 50px; } 50% { opacity: 1; width: 70px; } 100% { opacity: 0.5; width: 50px; } }
+        /* 分析結果區 */
+        .analysis-box { background: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px dashed #cbd5e0; margin-top: 10px; min-height: 100px; }
+        .loading { text-align: center; color: #999; padding: 20px; }
+        .tag { display: inline-block; background: #e1f5fe; color: #0288d1; padding: 2px 8px; border-radius: 12px; font-size: 0.8em; margin-right: 5px; }
     </style>
 </head>
 <body>
 
 <div class="container">
     <div class="header-card">
-        <div class="select-container">
-            <label>選擇預測目標模型：</label>
+        <div style="position: absolute; right: 25px; top: 25px; width: 200px;">
             <select id="targetSelect" onchange="switchTarget()">
                 <option value="NH4_1209">NH4_1209 (氨氮)</option>
                 <option value="RPI_1208">RPI_1208 (河川污染指數)</option>
                 <option value="SS_1206">SS_1206 (懸浮固體)</option>
             </select>
         </div>
+        <h2>🌊 AIoT 智慧水質分析平台</h2>
+        <div class="main-value" id="predValue">--</div>
+        <div class="sub-text">即時預測值 (<span id="unitDisplay">mg/L</span>) | 更新於: <span id="timeLabel">--</span></div>
+    </div>
 
-        <div class="header-title">
-            <h2>🌊 水質預測監控 (RFECV Testing Data)</h2>
-        </div>
-        
-        <div class="value-display">
-            <div id="loadingLine" class="loading-bar"></div>
-            <div id="predValue" class="main-value">--</div>
-            <div class="sub-text">當前預測值 (<span id="targetUnitDisplay">mg/L</span>)</div>
-            <div id="timeLabel" style="color: #bdc3c7; font-size: 0.9em; margin-top: 5px;">等待連線中...</div>
+    <div class="card" style="height: 400px;">
+        <h3>📈 即時監控趨勢 (點擊圖表以執行 LIME 分析)</h3>
+        <canvas id="lineChart"></canvas>
+    </div>
+
+    <div class="card" style="overflow-y: auto; height: 400px;">
+        <h3>⚡ 即時影響因子 (SHAP Top 5)</h3>
+        <div id="shapList">
+            <div class="loading">等待數據...</div>
         </div>
     </div>
 
-    <div class="charts-grid">
-        <div class="card">
-            <h3>📈 預測趨勢 (Time Series)</h3>
-            <div style="height: 320px;">
-                <canvas id="lineChart"></canvas>
-            </div>
+    <div class="card">
+        <h3>🔍 LIME 單點深度診斷</h3>
+        <div class="analysis-box" id="limeResult">
+            <div class="loading">請點擊上方折線圖的任一點以進行分析</div>
         </div>
-        
-        <div class="card">
-            <h3>🧪 Top 5 影響特徵 (即時數值)</h3>
-            <div id="featureList">
-                <div style="text-align:center; color:#ccc; margin-top: 50px;">等待數據中...</div>
-            </div>
+    </div>
+
+    <div class="card">
+        <h3>📅 PI 區間重要性分析</h3>
+        <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+            <input type="date" id="piStart" value="2018-01-01">
+            <input type="date" id="piEnd" value="2018-06-30">
+            <button onclick="runPI()" style="width: auto;">執行分析</button>
+        </div>
+        <div class="analysis-box" id="piResult">
+            <div class="loading">選擇日期範圍後點擊執行</div>
         </div>
     </div>
 </div>
 
 <script>
     // ==========================================
-    // ★★★ 請修改這裡：填入您的 API Ngrok 網址 ★★★
+    // ★★★ 請修改這裡：填入 API Ngrok 網址 ★★★
     // ==========================================
-    const API_BASE = "https://elidia-pharmacopoeial-perpendicularly.ngrok-free.dev"; // 注意：後面不要有斜線
+    const API_BASE = "https://elidia-pharmacopoeial-perpendicularly.ngrok-free.dev"; 
 
-    const lineCtx = document.getElementById('lineChart').getContext('2d');
-    const lineChart = new Chart(lineCtx, {
+    // --- 初始化圖表 ---
+    const ctx = document.getElementById('lineChart').getContext('2d');
+    const chart = new Chart(ctx, {
         type: 'line',
-        data: { 
-            labels: [], 
-            datasets: [{ 
-                label: '預測數值', 
-                data: [], 
-                borderColor: '#3498db', 
-                borderWidth: 2, 
-                tension: 0.4, 
-                fill: true, 
-                backgroundColor: 'rgba(52, 152, 219, 0.05)' 
-            }] 
-        },
+        data: { labels: [], datasets: [{ label: '預測值', data: [], borderColor: '#3498db', tension: 0.4, fill: true, backgroundColor: 'rgba(52, 152, 219, 0.1)' }] },
         options: { 
             responsive: true, 
-            maintainAspectRatio: false, 
-            scales: { x: { display: false }, y: { beginAtZero: false } }, 
-            plugins: { legend: { display: false } },
-            animation: false 
+            maintainAspectRatio: false,
+            onClick: handleChartClick, // ★ 綁定點擊事件
+            interaction: { mode: 'nearest', intersect: true },
+            plugins: { legend: { display: false } }
         }
     });
 
-    let lastTimestamp = "";
+    let currentTarget = "NH4_1209";
+    let lastTime = "";
 
-    // ★ 1. 判斷特徵 (小項目) 的單位
-    function getFeatureUnit(name) {
-        const n = name.toUpperCase();
-        if (n.includes("EC") || n.includes("COND")) return "μS/cm";
-        if (n.includes("PH")) return "";
-        if (n.includes("TEMP") || n.includes("WT")) return "°C";
-        if (n.includes("TURB")) return "NTU";
+    // --- 輔助函式 ---
+    function getUnit(name) {
+        if (name.includes("EC")) return "μS/cm";
+        if (name.includes("PH")) return "";
+        if (name.includes("TEMP")) return "°C";
         return "mg/L";
     }
 
-    // ★ 2. 判斷目標 (大標題) 的單位
-    function getTargetUnit(targetName) {
-        const t = targetName.toUpperCase();
-        // 如果是 RPI (指數)，通常沒有單位或稱為 "Score"
-        if (t.includes("RPI")) return "Index"; 
-        // 如果是導電度
-        if (t.includes("EC")) return "μS/cm";
-        // 如果是濁度
-        if (t.includes("TURBIDITY")) return "NTU";
-        // 預設 (NH4, SS, COD, BOD 都是 mg/L)
-        return "mg/L";
-    }
-
-    async function switchTarget() {
-        const select = document.getElementById('targetSelect');
-        const newTarget = select.value;
-        
-        try {
-            await fetch(`${API_BASE}/api/config/set_target`, {
-                method: 'POST',
-                headers: { 
-                    'Content-Type': 'application/json',
-                    "ngrok-skip-browser-warning": "true"
-                },
-                body: JSON.stringify({ target_name: newTarget })
-            });
-            
-            lineChart.data.labels = [];
-            lineChart.data.datasets[0].data = [];
-            lineChart.update();
-            document.getElementById('featureList').innerHTML = '<div style="text-align:center;color:#ccc;margin-top:50px;">🔄 模型切換中...</div>';
-            document.getElementById('predValue').innerText = "--";
-            document.getElementById('predValue').style.color = "#ccc";
-            
-            // ★ 切換時順便更新單位顯示 (給使用者立即回饋)
-            document.getElementById('targetUnitDisplay').innerText = getTargetUnit(newTarget);
-
-            console.log("已切換至:", newTarget);
-        } catch (e) {
-            console.error("切換失敗", e);
-            alert("切換失敗，請確認 API 連線是否正常");
-        }
-    }
-
+    // --- 核心功能 1: 定時更新 (SHAP) ---
     async function updateDashboard() {
         try {
-            const res = await fetch(`${API_BASE}/api/dashboard/monitor`, {
-                headers: { "ngrok-skip-browser-warning": "true" }
-            });
+            const res = await fetch(`${API_BASE}/api/dashboard/monitor`, { headers: {"ngrok-skip-browser-warning": "true"} });
             const data = await res.json();
 
-            if (data.timestamp === "Waiting..." || data.timestamp === lastTimestamp) return;
-            lastTimestamp = data.timestamp;
+            if(data.timestamp === "Waiting..." || data.timestamp === lastTime) return;
+            lastTime = data.timestamp;
 
             // 更新數值
-            document.getElementById('predValue').innerText = data.value.toFixed(4);
-            document.getElementById('predValue').style.color = "#2ecc71";
-            document.getElementById('timeLabel').innerText = "最後更新: " + data.timestamp;
-            document.getElementById('loadingLine').style.display = 'none';
+            document.getElementById('predValue').innerText = data.value.toFixed(2);
+            document.getElementById('timeLabel').innerText = data.timestamp;
             
-            // ★ 收到數據後，再次確認並更新大標題的單位
-            document.getElementById('targetUnitDisplay').innerText = getTargetUnit(data.target);
-
-            const select = document.getElementById('targetSelect');
-            if (select.value !== data.target && data.target !== "--") {
-                select.value = data.target;
+            // 更新圖表
+            chart.data.labels.push(data.timestamp);
+            chart.data.datasets[0].data.push(data.value);
+            if(chart.data.labels.length > 20) {
+                chart.data.labels.shift();
+                chart.data.datasets[0].data.shift();
             }
+            chart.update('none'); // 'none' 模式避免動畫干擾點擊
 
-            lineChart.data.labels.push(data.timestamp);
-            lineChart.data.datasets[0].data.push(data.value);
-            if (lineChart.data.labels.length > 20) {
-                lineChart.data.labels.shift();
-                lineChart.data.datasets[0].data.shift();
+            // 更新 SHAP 列表
+            const list = document.getElementById('shapList');
+            list.innerHTML = "";
+            for (const [k, v] of Object.entries(data.top_features)) {
+                list.innerHTML += `
+                    <div class="feature-row">
+                        <span class="feat-name">${k}</span>
+                        <span class="feat-val">${v.toFixed(2)} <small>${getUnit(k)}</small></span>
+                    </div>`;
             }
-            lineChart.update();
+        } catch(e) { console.error("Monitor Error", e); }
+    }
 
-            const listContainer = document.getElementById('featureList');
-            listContainer.innerHTML = ""; 
+    // --- 核心功能 2: 切換目標 ---
+    async function switchTarget() {
+        const val = document.getElementById('targetSelect').value;
+        currentTarget = val;
+        await fetch(`${API_BASE}/api/config/set_target`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', "ngrok-skip-browser-warning": "true"},
+            body: JSON.stringify({ target_name: val })
+        });
+        // 重置畫面
+        chart.data.labels = [];
+        chart.data.datasets[0].data = [];
+        chart.update();
+        document.getElementById('predValue').innerText = "--";
+    }
+
+    // --- 核心功能 3: LIME 點擊分析 ---
+    function handleChartClick(evt, elements) {
+        if (elements.length === 0) return;
+        
+        const idx = elements[0].index;
+        const timestamp = chart.data.labels[idx];
+        
+        document.getElementById('limeResult').innerHTML = `<div class="loading">正在分析 ${timestamp} 的 LIME 解釋...<br>(這可能需要幾秒鐘)</div>`;
+        
+        // 發送 LIME 請求
+        fetch(`${API_BASE}/api/analysis/request`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', "ngrok-skip-browser-warning": "true"},
+            body: JSON.stringify({
+                type: "LIME",
+                target_name: currentTarget,
+                params: { timestamp: timestamp }
+            })
+        })
+        .then(res => res.json())
+        .then(data => pollResult(data.task_id, 'limeResult'));
+    }
+
+    // --- 核心功能 4: PI 區間分析 ---
+    function runPI() {
+        const start = document.getElementById('piStart').value;
+        const end = document.getElementById('piEnd').value;
+        
+        document.getElementById('piResult').innerHTML = `<div class="loading">正在計算 ${start} 至 ${end} 的 PI 重要性...</div>`;
+        
+        fetch(`${API_BASE}/api/analysis/request`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', "ngrok-skip-browser-warning": "true"},
+            body: JSON.stringify({
+                type: "PI",
+                target_name: currentTarget,
+                params: { start: start, end: end }
+            })
+        })
+        .then(res => res.json())
+        .then(data => pollResult(data.task_id, 'piResult'));
+    }
+
+    // --- 通用：輪詢結果 (Polling) ---
+    function pollResult(taskId, divId) {
+        const interval = setInterval(async () => {
+            try {
+                const res = await fetch(`${API_BASE}/api/analysis/result/${taskId}`, { headers: {"ngrok-skip-browser-warning": "true"} });
+                const json = await res.json();
+                
+                if (json.status === "completed") {
+                    clearInterval(interval);
+                    renderAnalysisResult(json.data, divId);
+                }
+            } catch(e) {
+                clearInterval(interval);
+                document.getElementById(divId).innerText = "分析失敗";
+            }
+        }, 1000); // 每秒檢查一次
+    }
+
+    function renderAnalysisResult(data, divId) {
+        const container = document.getElementById(divId);
+        container.innerHTML = "";
+        
+        // 顯示標題資訊
+        if (data.timestamp) container.innerHTML += `<div style="margin-bottom:10px;"><strong>分析時間點:</strong> ${data.timestamp}</div>`;
+        if (data.range) container.innerHTML += `<div style="margin-bottom:10px;"><strong>分析區間:</strong> ${data.range}</div>`;
+        
+        // 顯示特徵權重
+        let html = '<div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">';
+        if (data.features) {
+            // 排序
+            const sorted = Object.entries(data.features).sort(([,a], [,b]) => Math.abs(b) - Math.abs(a));
             
-            const features = data.top_features;
-            
-            for (const [name, value] of Object.entries(features)) {
-                const unit = getFeatureUnit(name); 
-                const row = document.createElement('div');
-                row.className = 'feature-row';
-                row.innerHTML = `
-                    <div class="feat-name">${name}</div>
-                    <div class="feat-val">
-                        ${value.toFixed(2)}<span class="unit">${unit}</span>
-                    </div>
-                `;
-                listContainer.appendChild(row);
+            for (const [k, v] of sorted) {
+                const barWidth = Math.min(Math.abs(v) * 100, 100); // 簡單視覺化
+                const color = v > 0 ? '#e74c3c' : '#3498db'; // 紅正藍負
+                html += `
+                    <div style="background:white; padding:8px; border-radius:5px;">
+                        <div style="font-size:0.9em; color:#666;">${k}</div>
+                        <div style="font-weight:bold; color:${color}">${v.toFixed(4)}</div>
+                        <div style="height:4px; background:#eee; margin-top:5px;">
+                            <div style="height:100%; width:${barWidth}%; background:${color};"></div>
+                        </div>
+                    </div>`;
             }
-
-        } catch (e) {
-            console.error("連線錯誤", e);
-            document.getElementById('timeLabel').innerText = "連線中斷...";
         }
+        html += '</div>';
+        container.innerHTML += html;
     }
 
     setInterval(updateDashboard, 1000);
