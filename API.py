@@ -11,19 +11,21 @@ from pyngrok import ngrok
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import Dict, Any
-
+from typing import Dict, Any, List, Optional
+import uuid
 
 nest_asyncio.apply()
 
 # ★★★ 請填入您的 Ngrok Token ★★★
-NGROK_TOKEN = "36biCzr0Ibfu5xePl72Io9vxx1U_3u4PyckBZK54ZEBzg1743"
+NGROK_TOKEN = "請填入您的 Ngrok Token" 
 ngrok.set_auth_token(NGROK_TOKEN)
 
 DB_NAME = "water_system.db"
-
-# ★新增：全域變數，紀錄目前選定的目標 (預設值)
 CURRENT_TARGET_CONFIG = {"target": "NH4_1209"}
+
+# ★新增：任務佇列與結果暫存區 (簡易版 Message Queue)
+ANALYSIS_TASKS = [] 
+ANALYSIS_RESULTS = {}
 
 def init_db():
     conn = sqlite3.connect(DB_NAME)
@@ -38,12 +40,26 @@ init_db()
 app = FastAPI()
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
+# --- 資料模型 ---
 class RawData(BaseModel):
     device_id: str; timestamp: str; ph: float; cod: float
+
 class MLResult(BaseModel):
     timestamp: str; raw_id: int; is_pollution: bool; predicted_value: float; target_name: str; top_features: Dict[str, float]
+
 class TargetConfig(BaseModel):
     target_name: str
+
+# ★新增：LIME/PI 請求與結果模型
+class AnalysisRequest(BaseModel):
+    type: str  # "LIME" or "PI"
+    target_name: str
+    params: Dict[str, Any] # LIME 放 timestamp, PI 放 start/end date
+
+class AnalysisResult(BaseModel):
+    task_id: str
+    status: str
+    data: Dict[str, Any]
 
 # --- API 路由 ---
 
@@ -56,7 +72,7 @@ def upload_sensor_data(data: RawData):
     conn.close()
     return {"status": "saved"}
 
-# ★修改：ML Worker 在抓資料時，順便告訴它現在的目標是誰
+# [ML端使用] 獲取最新 Sensor 資料 + ★領取分析任務
 @app.get("/api/ml/fetch_latest")
 def get_latest_raw_data():
     conn = sqlite3.connect(DB_NAME)
@@ -64,13 +80,22 @@ def get_latest_raw_data():
     cursor.execute("SELECT * FROM raw_sensor_data ORDER BY id DESC LIMIT 1")
     row = cursor.fetchone()
     conn.close()
+    
+    # 取出所有待處理任務，並清空佇列 (一次領完)
+    pending_tasks = ANALYSIS_TASKS.copy()
+    ANALYSIS_TASKS.clear()
+
+    response = {
+        "current_target": CURRENT_TARGET_CONFIG["target"],
+        "pending_tasks": pending_tasks # ★ 告訴 ML 有這些額外工作要做
+    }
+
     if row:
-        return {
-            "id": row[0], "timestamp": row[1], "device_id": row[2],
-            "ph": row[3], "cod": row[4],
-            "current_target": CURRENT_TARGET_CONFIG["target"] # 回傳目前設定的目標
-        }
-    return {"error": "no_data", "current_target": CURRENT_TARGET_CONFIG["target"]}
+        response.update({"id": row[0], "timestamp": row[1], "device_id": row[2], "ph": row[3], "cod": row[4]})
+    else:
+        response["error"] = "no_data"
+        
+    return response
 
 @app.post("/api/ml/submit_result")
 def submit_ml_result(data: MLResult):
@@ -82,6 +107,32 @@ def submit_ml_result(data: MLResult):
     conn.commit()
     conn.close()
     return {"status": "saved"}
+
+# [ML端使用] ★ 回傳分析結果 (LIME/PI)
+@app.post("/api/ml/submit_analysis")
+def submit_analysis_result(res: AnalysisResult):
+    ANALYSIS_RESULTS[res.task_id] = res.data
+    return {"status": "received"}
+
+# [前端使用] ★ 發送 LIME/PI 請求
+@app.post("/api/analysis/request")
+def request_analysis(req: AnalysisRequest):
+    task_id = str(uuid.uuid4())
+    task = {
+        "id": task_id,
+        "type": req.type,
+        "target": req.target_name,
+        "params": req.params
+    }
+    ANALYSIS_TASKS.append(task)
+    return {"status": "queued", "task_id": task_id}
+
+# [前端使用] ★ 查詢分析結果
+@app.get("/api/analysis/result/{task_id}")
+def get_analysis_result(task_id: str):
+    if task_id in ANALYSIS_RESULTS:
+        return {"status": "completed", "data": ANALYSIS_RESULTS[task_id]}
+    return {"status": "processing"}
 
 @app.get("/api/dashboard/monitor")
 def get_dashboard_data():
@@ -95,7 +146,6 @@ def get_dashboard_data():
         return {"timestamp": row[0], "value": data["val"], "target": data["target"], "top_features": data["feats"]}
     return {"timestamp": "Waiting...", "value": 0, "target": "--", "top_features": {}}
 
-# ★新增：讓前端設定目標的 API
 @app.post("/api/config/set_target")
 def set_target(config: TargetConfig):
     CURRENT_TARGET_CONFIG["target"] = config.target_name
