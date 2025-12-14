@@ -16,30 +16,36 @@
         
         /* 卡片通用 */
         .card { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); transition: transform 0.2s; }
-        .card:hover { transform: translateY(-2px); box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
         h3 { margin-top: 0; color: #444; border-bottom: 2px solid #f1f3f4; padding-bottom: 10px; font-size: 1.1em; display: flex; justify-content: space-between; }
         
-        /* 數值大屏 */
+        /* 數值顯示 */
         .main-value { font-size: 3.5em; font-weight: 800; color: #34a853; margin: 5px 0; }
         .unit-label { font-size: 0.4em; color: #888; font-weight: normal; }
         .status-badge { background: #e6f4ea; color: #1e8e3e; padding: 5px 12px; border-radius: 20px; font-size: 0.9em; font-weight: bold; }
 
-        /* 即時 SHAP 列表 */
-        .shap-row { display: flex; align-items: center; margin-bottom: 12px; }
-        .shap-name { width: 80px; font-size: 0.9em; font-weight: bold; color: #555; }
-        .shap-bar-container { flex-grow: 1; height: 8px; background: #eee; border-radius: 4px; margin: 0 10px; overflow: hidden; }
-        .shap-bar { height: 100%; border-radius: 4px; transition: width 0.5s; }
-        .shap-val { width: 60px; text-align: right; font-weight: bold; font-size: 0.9em; }
+        /* ★ SHAP 列表樣式 (保持您原本的樣子) ★ */
+        .feature-row { 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center;
+            padding: 15px 10px; 
+            border-bottom: 1px solid #eee; 
+            transition: background 0.2s;
+        }
+        .feature-row:last-child { border-bottom: none; }
+        .feature-row:hover { background-color: #f9f9f9; }
+        .feat-name { font-size: 1.1em; font-weight: 600; color: #555; }
+        .feat-val { font-size: 1.2em; font-weight: bold; color: #2c3e50; }
+        .unit { font-size: 0.8em; color: #999; margin-left: 5px; font-weight: normal; }
 
         /* 輸入控制項 */
         select, input[type="date"], button { padding: 8px 12px; border: 1px solid #dadce0; border-radius: 6px; font-size: 14px; outline: none; }
         button { background: #1a73e8; color: white; border: none; cursor: pointer; font-weight: bold; }
         button:hover { background: #1557b0; }
-        button:active { transform: scale(0.98); }
 
-        /* 分析圖表容器 */
+        /* 圖表容器 */
         .chart-box { position: relative; height: 250px; width: 100%; }
-        .loading-overlay { position: absolute; top:0; left:0; width:100%; height:100%; background: rgba(255,255,255,0.8); display: flex; justify-content: center; align-items: center; color: #666; font-weight: bold; z-index: 10; display: none; }
+        .loading-overlay { position: absolute; top:0; left:0; width:100%; height:100%; background: rgba(255,255,255,0.9); display: flex; justify-content: center; align-items: center; color: #666; font-weight: bold; z-index: 10; display: none; flex-direction: column; }
     </style>
 </head>
 <body>
@@ -64,15 +70,15 @@
     </div>
 
     <div class="card" style="grid-column: 1 / 2;">
-        <h3>📈 即時監控趨勢 <small style="color: #888; font-weight: normal; font-size: 0.8em;">(點擊折線圖上的點可進行 LIME 診斷)</small></h3>
-        <div style="height: 300px;">
+        <h3>📈 即時監控趨勢 <small style="color: #888; font-weight: normal; font-size: 0.8em;">(點擊折線圖以執行 LIME)</small></h3>
+        <div style="height: 320px;">
             <canvas id="mainChart"></canvas>
         </div>
     </div>
 
     <div class="card" style="grid-column: 2 / 3;">
-        <h3>⚡ 即時關鍵因子 (SHAP Top 5)</h3>
-        <div id="shapContainer" style="margin-top: 15px;">
+        <h3>🧪 Top 5 影響特徵 (即時數值)</h3>
+        <div id="featureList" style="height: 320px; overflow-y: auto;">
             <div style="text-align: center; color: #999; margin-top: 50px;">等待數據串流...</div>
         </div>
     </div>
@@ -83,7 +89,10 @@
             <span id="limeTimestamp" style="font-size: 0.8em; color: #1a73e8;">(請點擊上方圖表)</span>
         </h3>
         <div class="chart-box">
-            <div id="limeLoading" class="loading-overlay">分析運算中...</div>
+            <div id="limeLoading" class="loading-overlay">
+                <span>⚡ 分析運算中...</span>
+                <small style="color:#999; margin-top:5px;">(需時約 2-5 秒)</small>
+            </div>
             <canvas id="limeChart"></canvas>
         </div>
     </div>
@@ -91,12 +100,14 @@
     <div class="card" style="grid-column: 2 / 3;">
         <h3>📅 PI 長期權重分析</h3>
         <div style="display: flex; gap: 5px; margin-bottom: 10px;">
-            <input type="date" id="piStart" value="2018-01-01" style="width: 100px;">
-            <input type="date" id="piEnd" value="2018-06-30" style="width: 100px;">
+            <input type="date" id="piStart" value="2018-01-01" style="width: 110px;">
+            <input type="date" id="piEnd" value="2018-06-30" style="width: 110px;">
             <button onclick="runPI()">分析</button>
         </div>
         <div class="chart-box">
-            <div id="piLoading" class="loading-overlay">大數據計算中...</div>
+            <div id="piLoading" class="loading-overlay">
+                <span>📊 大數據計算中...</span>
+            </div>
             <canvas id="piChart"></canvas>
         </div>
     </div>
@@ -106,13 +117,13 @@
     // ==========================================
     // ★★★ 請修改這裡：填入 API Ngrok 網址 ★★★
     // ==========================================
-    const API_BASE = "https://elidia-pharmacopoeial-perpendicularly.ngrok-free.dev"; 
+    const API_BASE = "https://elidia-pharmacopoeial-perpendicularly.ngrok-free.dev"; // 注意：後面不要有斜線
 
     // --- 全域變數 ---
     let currentTarget = "NH4_1209";
     let lastTime = "";
     
-    // Chart 實例 (用於銷毀重繪)
+    // Chart 實例
     let mainChartInstance = null;
     let limeChartInstance = null;
     let piChartInstance = null;
@@ -121,9 +132,17 @@
     function getUnit(name) {
         if (!name) return "";
         const n = name.toUpperCase();
-        if (n.includes("EC")) return "μS/cm";
+        if (n.includes("EC") || n.includes("COND")) return "μS/cm";
         if (n.includes("PH")) return "";
         if (n.includes("TEMP") || n.includes("WT")) return "°C";
+        if (n.includes("TURB")) return "NTU";
+        return "mg/L";
+    }
+    
+    function getTargetUnit(targetName) {
+        const t = targetName.toUpperCase();
+        if (t.includes("RPI")) return "Index"; 
+        if (t.includes("EC")) return "μS/cm";
         return "mg/L";
     }
 
@@ -136,14 +155,14 @@
             options: { 
                 responsive: true, 
                 maintainAspectRatio: false,
-                onClick: handleChartClick, // ★ 綁定點擊事件
+                onClick: handleChartClick, // 綁定點擊
                 plugins: { legend: { display: false } },
                 scales: { x: { display: false } }
             }
         });
     }
 
-    // --- 核心功能 1: 即時監控 (SHAP + 數值) ---
+    // --- 核心功能 1: 即時監控 (SHAP 保持列表) ---
     async function updateDashboard() {
         try {
             const res = await fetch(`${API_BASE}/api/dashboard/monitor`, { headers: {"ngrok-skip-browser-warning": "true"} });
@@ -153,7 +172,7 @@
             lastTime = data.timestamp;
 
             // 1. 更新數值
-            document.getElementById('predValue').innerHTML = `${data.value.toFixed(2)} <span class="unit-label">${getUnit(data.target)}</span>`;
+            document.getElementById('predValue').innerHTML = `${data.value.toFixed(2)} <span class="unit-label" id="targetUnitDisplay">${getTargetUnit(data.target)}</span>`;
             document.getElementById('timeLabel').innerText = data.timestamp;
             
             // 2. 更新折線圖
@@ -166,38 +185,34 @@
             }
             chart.update('none'); 
 
-            // 3. 更新 SHAP 列表 (視覺化進度條)
-            const container = document.getElementById('shapContainer');
-            container.innerHTML = "";
+            // 3. 更新 SHAP 列表 (★ 這裡保持您要的列表樣式 ★)
+            const listContainer = document.getElementById('featureList');
+            listContainer.innerHTML = ""; 
             
-            // 找出最大值以計算比例
-            const maxVal = Math.max(...Object.values(data.top_features).map(Math.abs));
-            
-            for (const [k, v] of Object.entries(data.top_features)) {
-                // 這裡 v 是原始數值，不是 SHAP 值，所以我們只顯示數值，不做顏色區分
-                // 若要顯示 SHAP 貢獻度，後端需要回傳 SHAP 值
-                const widthPct = (Math.abs(v) / maxVal) * 100;
-                
-                container.innerHTML += `
-                    <div class="shap-row">
-                        <div class="shap-name">${k}</div>
-                        <div class="shap-bar-container">
-                            <div class="shap-bar" style="width: ${widthPct}%; background: #1a73e8;"></div>
-                        </div>
-                        <div class="shap-val">${v.toFixed(2)}</div>
-                    </div>`;
+            for (const [name, value] of Object.entries(data.top_features)) {
+                const unit = getUnit(name); 
+                const row = document.createElement('div');
+                row.className = 'feature-row';
+                row.innerHTML = `
+                    <div class="feat-name">${name}</div>
+                    <div class="feat-val">
+                        ${value.toFixed(2)}<span class="unit">${unit}</span>
+                    </div>
+                `;
+                listContainer.appendChild(row);
             }
+
         } catch(e) { console.error("Monitor Error", e); }
     }
 
-    // --- 核心功能 2: LIME 圖表 (雙向長條圖) ---
+    // --- 核心功能 2: LIME 圖表 (改為 Chart) ---
     function handleChartClick(evt, elements) {
         if (elements.length === 0) return;
         
         const idx = elements[0].index;
         const timestamp = mainChartInstance.data.labels[idx];
         
-        document.getElementById('limeLoading').style.display = 'flex'; // 顯示 Loading
+        document.getElementById('limeLoading').style.display = 'flex'; 
         document.getElementById('limeTimestamp').innerText = `(${timestamp})`;
 
         fetch(`${API_BASE}/api/analysis/request`, {
@@ -211,9 +226,8 @@
 
     function renderLimeChart(data) {
         const ctx = document.getElementById('limeChart').getContext('2d');
-        if (limeChartInstance) limeChartInstance.destroy(); // 清除舊圖
+        if (limeChartInstance) limeChartInstance.destroy(); 
 
-        // 資料處理
         const labels = Object.keys(data.features);
         const values = Object.values(data.features);
         const colors = values.map(v => v >= 0 ? '#34a853' : '#ea4335'); // 綠正紅負
@@ -223,7 +237,7 @@
             data: {
                 labels: labels,
                 datasets: [{
-                    label: '影響權重 (Weight)',
+                    label: '影響權重',
                     data: values,
                     backgroundColor: colors,
                     borderRadius: 4
@@ -233,17 +247,14 @@
                 indexAxis: 'y', // 水平長條圖
                 responsive: true,
                 maintainAspectRatio: false,
-                plugins: { legend: { display: false } },
-                scales: {
-                    x: { grid: { color: '#f0f0f0' } },
-                    y: { grid: { display: false } }
-                }
+                plugins: { legend: { display: false }, title: { display: true, text: 'LIME 特徵貢獻度 (正/負影響)' } },
+                scales: { x: { grid: { color: '#f0f0f0' } }, y: { grid: { display: false } } }
             }
         });
         document.getElementById('limeLoading').style.display = 'none';
     }
 
-    // --- 核心功能 3: PI 圖表 (排序長條圖) ---
+    // --- 核心功能 3: PI 圖表 (改為 Chart) ---
     function runPI() {
         const start = document.getElementById('piStart').value;
         const end = document.getElementById('piEnd').value;
@@ -262,7 +273,7 @@
         const ctx = document.getElementById('piChart').getContext('2d');
         if (piChartInstance) piChartInstance.destroy();
 
-        // 排序資料
+        // 排序
         const sorted = Object.entries(data.features).sort(([,a], [,b]) => b - a);
         const labels = sorted.map(x => x[0]);
         const values = sorted.map(x => x[1]);
@@ -274,14 +285,14 @@
                 datasets: [{
                     label: '重要性分數',
                     data: values,
-                    backgroundColor: '#fbbc04', // 黃色系
+                    backgroundColor: '#fbbc04', 
                     borderRadius: 4
                 }]
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                plugins: { legend: { display: false } },
+                plugins: { legend: { display: false }, title: { display: true, text: 'PI 特徵重要性排行 (越高越重要)' } },
                 scales: { y: { beginAtZero: true } }
             }
         });
@@ -313,11 +324,14 @@
             headers: {'Content-Type': 'application/json', "ngrok-skip-browser-warning": "true"},
             body: JSON.stringify({ target_name: val })
         });
-        // 重置
+        
         mainChartInstance.data.labels = [];
         mainChartInstance.data.datasets[0].data = [];
         mainChartInstance.update();
         document.getElementById('predValue').innerText = "--";
+        
+        // 更新大單位
+        document.getElementById('targetUnitDisplay').innerText = getTargetUnit(val);
     }
 
     initMainChart();
