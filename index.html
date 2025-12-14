@@ -3,89 +3,101 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AIoT 智慧水質分析平台</title>
+    <title>AIoT 智慧水質戰情室</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/moment"></script> <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-moment"></script>
     <style>
-        body { font-family: 'Segoe UI', Tahoma, sans-serif; background-color: #f4f6f8; margin: 0; padding: 20px; }
-        .container { max-width: 1200px; margin: 0 auto; display: grid; grid-template-columns: 2fr 1fr; gap: 20px; }
+        body { font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f0f2f5; margin: 0; padding: 20px; color: #333; }
+        .container { max-width: 1400px; margin: 0 auto; display: grid; grid-template-columns: 2fr 1fr; gap: 20px; }
         
-        /* 標頭跨欄 */
-        .header-card { grid-column: 1 / -1; background: white; border-radius: 15px; padding: 25px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); text-align: center; position: relative;}
+        /* 標頭 */
+        .header-card { grid-column: 1 / -1; background: white; border-radius: 12px; padding: 20px 30px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); display: flex; justify-content: space-between; align-items: center; }
+        .header-left h2 { margin: 0; color: #1a73e8; display: flex; align-items: center; gap: 10px; }
+        .header-right { text-align: right; }
         
-        /* 卡片樣式 */
-        .card { background: white; border-radius: 15px; padding: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
-        .full-width { grid-column: 1 / -1; }
+        /* 卡片通用 */
+        .card { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); transition: transform 0.2s; }
+        .card:hover { transform: translateY(-2px); box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        h3 { margin-top: 0; color: #444; border-bottom: 2px solid #f1f3f4; padding-bottom: 10px; font-size: 1.1em; display: flex; justify-content: space-between; }
         
-        h3 { color: #2c3e50; border-bottom: 2px solid #f0f2f5; padding-bottom: 10px; margin-top: 0; font-size: 1.1em; }
-        
-        /* 數值顯示 */
-        .main-value { font-size: 3.5em; font-weight: bold; color: #2ecc71; margin: 10px 0; }
-        .sub-text { color: #7f8c8d; }
-        
-        /* 列表樣式 */
-        .feature-row { display: flex; justify-content: space-between; padding: 12px 5px; border-bottom: 1px solid #eee; }
-        .feat-name { font-weight: 600; color: #555; }
-        .feat-val { font-weight: bold; color: #2c3e50; }
-        
-        /* 輸入控制項 */
-        .control-group { margin-bottom: 15px; }
-        label { display: block; margin-bottom: 5px; color: #666; font-size: 0.9em; }
-        select, input[type="date"] { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px; box-sizing: border-box; }
-        button { width: 100%; padding: 10px; background: #3498db; color: white; border: none; border-radius: 5px; cursor: pointer; transition: 0.3s; }
-        button:hover { background: #2980b9; }
-        button:disabled { background: #bdc3c7; cursor: not-allowed; }
+        /* 數值大屏 */
+        .main-value { font-size: 3.5em; font-weight: 800; color: #34a853; margin: 5px 0; }
+        .unit-label { font-size: 0.4em; color: #888; font-weight: normal; }
+        .status-badge { background: #e6f4ea; color: #1e8e3e; padding: 5px 12px; border-radius: 20px; font-size: 0.9em; font-weight: bold; }
 
-        /* 分析結果區 */
-        .analysis-box { background: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px dashed #cbd5e0; margin-top: 10px; min-height: 100px; }
-        .loading { text-align: center; color: #999; padding: 20px; }
-        .tag { display: inline-block; background: #e1f5fe; color: #0288d1; padding: 2px 8px; border-radius: 12px; font-size: 0.8em; margin-right: 5px; }
+        /* 即時 SHAP 列表 */
+        .shap-row { display: flex; align-items: center; margin-bottom: 12px; }
+        .shap-name { width: 80px; font-size: 0.9em; font-weight: bold; color: #555; }
+        .shap-bar-container { flex-grow: 1; height: 8px; background: #eee; border-radius: 4px; margin: 0 10px; overflow: hidden; }
+        .shap-bar { height: 100%; border-radius: 4px; transition: width 0.5s; }
+        .shap-val { width: 60px; text-align: right; font-weight: bold; font-size: 0.9em; }
+
+        /* 輸入控制項 */
+        select, input[type="date"], button { padding: 8px 12px; border: 1px solid #dadce0; border-radius: 6px; font-size: 14px; outline: none; }
+        button { background: #1a73e8; color: white; border: none; cursor: pointer; font-weight: bold; }
+        button:hover { background: #1557b0; }
+        button:active { transform: scale(0.98); }
+
+        /* 分析圖表容器 */
+        .chart-box { position: relative; height: 250px; width: 100%; }
+        .loading-overlay { position: absolute; top:0; left:0; width:100%; height:100%; background: rgba(255,255,255,0.8); display: flex; justify-content: center; align-items: center; color: #666; font-weight: bold; z-index: 10; display: none; }
     </style>
 </head>
 <body>
 
 <div class="container">
     <div class="header-card">
-        <div style="position: absolute; right: 25px; top: 25px; width: 200px;">
-            <select id="targetSelect" onchange="switchTarget()">
-                <option value="NH4_1209">NH4_1209 (氨氮)</option>
-                <option value="RPI_1208">RPI_1208 (河川污染指數)</option>
-                <option value="SS_1206">SS_1206 (懸浮固體)</option>
-            </select>
+        <div class="header-left">
+            <h2>🌊 AIoT 智慧水質戰情室</h2>
+            <div style="color: #666; font-size: 0.9em; margin-top: 5px;">
+                監控目標：
+                <select id="targetSelect" onchange="switchTarget()" style="font-weight: bold; color: #1a73e8;">
+                    <option value="NH4_1209">NH4_1209 (氨氮)</option>
+                    <option value="RPI_1208">RPI_1208 (河川污染指數)</option>
+                    <option value="SS_1206">SS_1206 (懸浮固體)</option>
+                </select>
+            </div>
         </div>
-        <h2>🌊 AIoT 智慧水質分析平台</h2>
-        <div class="main-value" id="predValue">--</div>
-        <div class="sub-text">即時預測值 (<span id="unitDisplay">mg/L</span>) | 更新於: <span id="timeLabel">--</span></div>
-    </div>
-
-    <div class="card" style="height: 400px;">
-        <h3>📈 即時監控趨勢 (點擊圖表以執行 LIME 分析)</h3>
-        <canvas id="lineChart"></canvas>
-    </div>
-
-    <div class="card" style="overflow-y: auto; height: 400px;">
-        <h3>⚡ 即時影響因子 (SHAP Top 5)</h3>
-        <div id="shapList">
-            <div class="loading">等待數據...</div>
+        <div class="header-right">
+            <div id="predValue" class="main-value">-- <span class="unit-label" id="unitDisplay">mg/L</span></div>
+            <div class="status-badge">🟢 系統運作正常 | 更新於 <span id="timeLabel">--</span></div>
         </div>
     </div>
 
-    <div class="card">
-        <h3>🔍 LIME 單點深度診斷</h3>
-        <div class="analysis-box" id="limeResult">
-            <div class="loading">請點擊上方折線圖的任一點以進行分析</div>
+    <div class="card" style="grid-column: 1 / 2;">
+        <h3>📈 即時監控趨勢 <small style="color: #888; font-weight: normal; font-size: 0.8em;">(點擊折線圖上的點可進行 LIME 診斷)</small></h3>
+        <div style="height: 300px;">
+            <canvas id="mainChart"></canvas>
         </div>
     </div>
 
-    <div class="card">
-        <h3>📅 PI 區間重要性分析</h3>
-        <div style="display: flex; gap: 10px; margin-bottom: 10px;">
-            <input type="date" id="piStart" value="2018-01-01">
-            <input type="date" id="piEnd" value="2018-06-30">
-            <button onclick="runPI()" style="width: auto;">執行分析</button>
+    <div class="card" style="grid-column: 2 / 3;">
+        <h3>⚡ 即時關鍵因子 (SHAP Top 5)</h3>
+        <div id="shapContainer" style="margin-top: 15px;">
+            <div style="text-align: center; color: #999; margin-top: 50px;">等待數據串流...</div>
         </div>
-        <div class="analysis-box" id="piResult">
-            <div class="loading">選擇日期範圍後點擊執行</div>
+    </div>
+
+    <div class="card" style="grid-column: 1 / 2;">
+        <h3>
+            🔍 LIME 單點深度診斷
+            <span id="limeTimestamp" style="font-size: 0.8em; color: #1a73e8;">(請點擊上方圖表)</span>
+        </h3>
+        <div class="chart-box">
+            <div id="limeLoading" class="loading-overlay">分析運算中...</div>
+            <canvas id="limeChart"></canvas>
+        </div>
+    </div>
+
+    <div class="card" style="grid-column: 2 / 3;">
+        <h3>📅 PI 長期權重分析</h3>
+        <div style="display: flex; gap: 5px; margin-bottom: 10px;">
+            <input type="date" id="piStart" value="2018-01-01" style="width: 100px;">
+            <input type="date" id="piEnd" value="2018-06-30" style="width: 100px;">
+            <button onclick="runPI()">分析</button>
+        </div>
+        <div class="chart-box">
+            <div id="piLoading" class="loading-overlay">大數據計算中...</div>
+            <canvas id="piChart"></canvas>
         </div>
     </div>
 </div>
@@ -96,32 +108,42 @@
     // ==========================================
     const API_BASE = "https://elidia-pharmacopoeial-perpendicularly.ngrok-free.dev"; 
 
-    // --- 初始化圖表 ---
-    const ctx = document.getElementById('lineChart').getContext('2d');
-    const chart = new Chart(ctx, {
-        type: 'line',
-        data: { labels: [], datasets: [{ label: '預測值', data: [], borderColor: '#3498db', tension: 0.4, fill: true, backgroundColor: 'rgba(52, 152, 219, 0.1)' }] },
-        options: { 
-            responsive: true, 
-            maintainAspectRatio: false,
-            onClick: handleChartClick, // ★ 綁定點擊事件
-            interaction: { mode: 'nearest', intersect: true },
-            plugins: { legend: { display: false } }
-        }
-    });
-
+    // --- 全域變數 ---
     let currentTarget = "NH4_1209";
     let lastTime = "";
+    
+    // Chart 實例 (用於銷毀重繪)
+    let mainChartInstance = null;
+    let limeChartInstance = null;
+    let piChartInstance = null;
 
-    // --- 輔助函式 ---
+    // --- 輔助函式：判斷單位 ---
     function getUnit(name) {
-        if (name.includes("EC")) return "μS/cm";
-        if (name.includes("PH")) return "";
-        if (name.includes("TEMP")) return "°C";
+        if (!name) return "";
+        const n = name.toUpperCase();
+        if (n.includes("EC")) return "μS/cm";
+        if (n.includes("PH")) return "";
+        if (n.includes("TEMP") || n.includes("WT")) return "°C";
         return "mg/L";
     }
 
-    // --- 核心功能 1: 定時更新 (SHAP) ---
+    // --- 初始化主圖表 ---
+    function initMainChart() {
+        const ctx = document.getElementById('mainChart').getContext('2d');
+        mainChartInstance = new Chart(ctx, {
+            type: 'line',
+            data: { labels: [], datasets: [{ label: '預測值', data: [], borderColor: '#1a73e8', borderWidth: 2, tension: 0.4, fill: true, backgroundColor: 'rgba(26, 115, 232, 0.1)', pointRadius: 3, pointHoverRadius: 6 }] },
+            options: { 
+                responsive: true, 
+                maintainAspectRatio: false,
+                onClick: handleChartClick, // ★ 綁定點擊事件
+                plugins: { legend: { display: false } },
+                scales: { x: { display: false } }
+            }
+        });
+    }
+
+    // --- 核心功能 1: 即時監控 (SHAP + 數值) ---
     async function updateDashboard() {
         try {
             const res = await fetch(`${API_BASE}/api/dashboard/monitor`, { headers: {"ngrok-skip-browser-warning": "true"} });
@@ -130,33 +152,159 @@
             if(data.timestamp === "Waiting..." || data.timestamp === lastTime) return;
             lastTime = data.timestamp;
 
-            // 更新數值
-            document.getElementById('predValue').innerText = data.value.toFixed(2);
+            // 1. 更新數值
+            document.getElementById('predValue').innerHTML = `${data.value.toFixed(2)} <span class="unit-label">${getUnit(data.target)}</span>`;
             document.getElementById('timeLabel').innerText = data.timestamp;
             
-            // 更新圖表
+            // 2. 更新折線圖
+            const chart = mainChartInstance;
             chart.data.labels.push(data.timestamp);
             chart.data.datasets[0].data.push(data.value);
             if(chart.data.labels.length > 20) {
                 chart.data.labels.shift();
                 chart.data.datasets[0].data.shift();
             }
-            chart.update('none'); // 'none' 模式避免動畫干擾點擊
+            chart.update('none'); 
 
-            // 更新 SHAP 列表
-            const list = document.getElementById('shapList');
-            list.innerHTML = "";
+            // 3. 更新 SHAP 列表 (視覺化進度條)
+            const container = document.getElementById('shapContainer');
+            container.innerHTML = "";
+            
+            // 找出最大值以計算比例
+            const maxVal = Math.max(...Object.values(data.top_features).map(Math.abs));
+            
             for (const [k, v] of Object.entries(data.top_features)) {
-                list.innerHTML += `
-                    <div class="feature-row">
-                        <span class="feat-name">${k}</span>
-                        <span class="feat-val">${v.toFixed(2)} <small>${getUnit(k)}</small></span>
+                // 這裡 v 是原始數值，不是 SHAP 值，所以我們只顯示數值，不做顏色區分
+                // 若要顯示 SHAP 貢獻度，後端需要回傳 SHAP 值
+                const widthPct = (Math.abs(v) / maxVal) * 100;
+                
+                container.innerHTML += `
+                    <div class="shap-row">
+                        <div class="shap-name">${k}</div>
+                        <div class="shap-bar-container">
+                            <div class="shap-bar" style="width: ${widthPct}%; background: #1a73e8;"></div>
+                        </div>
+                        <div class="shap-val">${v.toFixed(2)}</div>
                     </div>`;
             }
         } catch(e) { console.error("Monitor Error", e); }
     }
 
-    // --- 核心功能 2: 切換目標 ---
+    // --- 核心功能 2: LIME 圖表 (雙向長條圖) ---
+    function handleChartClick(evt, elements) {
+        if (elements.length === 0) return;
+        
+        const idx = elements[0].index;
+        const timestamp = mainChartInstance.data.labels[idx];
+        
+        document.getElementById('limeLoading').style.display = 'flex'; // 顯示 Loading
+        document.getElementById('limeTimestamp').innerText = `(${timestamp})`;
+
+        fetch(`${API_BASE}/api/analysis/request`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', "ngrok-skip-browser-warning": "true"},
+            body: JSON.stringify({ type: "LIME", target_name: currentTarget, params: { timestamp: timestamp } })
+        })
+        .then(res => res.json())
+        .then(data => pollResult(data.task_id, 'LIME'));
+    }
+
+    function renderLimeChart(data) {
+        const ctx = document.getElementById('limeChart').getContext('2d');
+        if (limeChartInstance) limeChartInstance.destroy(); // 清除舊圖
+
+        // 資料處理
+        const labels = Object.keys(data.features);
+        const values = Object.values(data.features);
+        const colors = values.map(v => v >= 0 ? '#34a853' : '#ea4335'); // 綠正紅負
+
+        limeChartInstance = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: '影響權重 (Weight)',
+                    data: values,
+                    backgroundColor: colors,
+                    borderRadius: 4
+                }]
+            },
+            options: {
+                indexAxis: 'y', // 水平長條圖
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { grid: { color: '#f0f0f0' } },
+                    y: { grid: { display: false } }
+                }
+            }
+        });
+        document.getElementById('limeLoading').style.display = 'none';
+    }
+
+    // --- 核心功能 3: PI 圖表 (排序長條圖) ---
+    function runPI() {
+        const start = document.getElementById('piStart').value;
+        const end = document.getElementById('piEnd').value;
+        document.getElementById('piLoading').style.display = 'flex';
+
+        fetch(`${API_BASE}/api/analysis/request`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', "ngrok-skip-browser-warning": "true"},
+            body: JSON.stringify({ type: "PI", target_name: currentTarget, params: { start: start, end: end } })
+        })
+        .then(res => res.json())
+        .then(data => pollResult(data.task_id, 'PI'));
+    }
+
+    function renderPiChart(data) {
+        const ctx = document.getElementById('piChart').getContext('2d');
+        if (piChartInstance) piChartInstance.destroy();
+
+        // 排序資料
+        const sorted = Object.entries(data.features).sort(([,a], [,b]) => b - a);
+        const labels = sorted.map(x => x[0]);
+        const values = sorted.map(x => x[1]);
+
+        piChartInstance = new Chart(ctx, {
+            type: 'bar', // 垂直長條圖
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: '重要性分數',
+                    data: values,
+                    backgroundColor: '#fbbc04', // 黃色系
+                    borderRadius: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: { y: { beginAtZero: true } }
+            }
+        });
+        document.getElementById('piLoading').style.display = 'none';
+    }
+
+    // --- 通用：輪詢結果 ---
+    function pollResult(taskId, type) {
+        const interval = setInterval(async () => {
+            try {
+                const res = await fetch(`${API_BASE}/api/analysis/result/${taskId}`, { headers: {"ngrok-skip-browser-warning": "true"} });
+                const json = await res.json();
+                
+                if (json.status === "completed") {
+                    clearInterval(interval);
+                    if(type === 'LIME') renderLimeChart(json.data);
+                    if(type === 'PI') renderPiChart(json.data);
+                }
+            } catch(e) { clearInterval(interval); }
+        }, 1000);
+    }
+
+    // --- 切換目標 ---
     async function switchTarget() {
         const val = document.getElementById('targetSelect').value;
         currentTarget = val;
@@ -165,105 +313,14 @@
             headers: {'Content-Type': 'application/json', "ngrok-skip-browser-warning": "true"},
             body: JSON.stringify({ target_name: val })
         });
-        // 重置畫面
-        chart.data.labels = [];
-        chart.data.datasets[0].data = [];
-        chart.update();
+        // 重置
+        mainChartInstance.data.labels = [];
+        mainChartInstance.data.datasets[0].data = [];
+        mainChartInstance.update();
         document.getElementById('predValue').innerText = "--";
     }
 
-    // --- 核心功能 3: LIME 點擊分析 ---
-    function handleChartClick(evt, elements) {
-        if (elements.length === 0) return;
-        
-        const idx = elements[0].index;
-        const timestamp = chart.data.labels[idx];
-        
-        document.getElementById('limeResult').innerHTML = `<div class="loading">正在分析 ${timestamp} 的 LIME 解釋...<br>(這可能需要幾秒鐘)</div>`;
-        
-        // 發送 LIME 請求
-        fetch(`${API_BASE}/api/analysis/request`, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json', "ngrok-skip-browser-warning": "true"},
-            body: JSON.stringify({
-                type: "LIME",
-                target_name: currentTarget,
-                params: { timestamp: timestamp }
-            })
-        })
-        .then(res => res.json())
-        .then(data => pollResult(data.task_id, 'limeResult'));
-    }
-
-    // --- 核心功能 4: PI 區間分析 ---
-    function runPI() {
-        const start = document.getElementById('piStart').value;
-        const end = document.getElementById('piEnd').value;
-        
-        document.getElementById('piResult').innerHTML = `<div class="loading">正在計算 ${start} 至 ${end} 的 PI 重要性...</div>`;
-        
-        fetch(`${API_BASE}/api/analysis/request`, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json', "ngrok-skip-browser-warning": "true"},
-            body: JSON.stringify({
-                type: "PI",
-                target_name: currentTarget,
-                params: { start: start, end: end }
-            })
-        })
-        .then(res => res.json())
-        .then(data => pollResult(data.task_id, 'piResult'));
-    }
-
-    // --- 通用：輪詢結果 (Polling) ---
-    function pollResult(taskId, divId) {
-        const interval = setInterval(async () => {
-            try {
-                const res = await fetch(`${API_BASE}/api/analysis/result/${taskId}`, { headers: {"ngrok-skip-browser-warning": "true"} });
-                const json = await res.json();
-                
-                if (json.status === "completed") {
-                    clearInterval(interval);
-                    renderAnalysisResult(json.data, divId);
-                }
-            } catch(e) {
-                clearInterval(interval);
-                document.getElementById(divId).innerText = "分析失敗";
-            }
-        }, 1000); // 每秒檢查一次
-    }
-
-    function renderAnalysisResult(data, divId) {
-        const container = document.getElementById(divId);
-        container.innerHTML = "";
-        
-        // 顯示標題資訊
-        if (data.timestamp) container.innerHTML += `<div style="margin-bottom:10px;"><strong>分析時間點:</strong> ${data.timestamp}</div>`;
-        if (data.range) container.innerHTML += `<div style="margin-bottom:10px;"><strong>分析區間:</strong> ${data.range}</div>`;
-        
-        // 顯示特徵權重
-        let html = '<div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">';
-        if (data.features) {
-            // 排序
-            const sorted = Object.entries(data.features).sort(([,a], [,b]) => Math.abs(b) - Math.abs(a));
-            
-            for (const [k, v] of sorted) {
-                const barWidth = Math.min(Math.abs(v) * 100, 100); // 簡單視覺化
-                const color = v > 0 ? '#e74c3c' : '#3498db'; // 紅正藍負
-                html += `
-                    <div style="background:white; padding:8px; border-radius:5px;">
-                        <div style="font-size:0.9em; color:#666;">${k}</div>
-                        <div style="font-weight:bold; color:${color}">${v.toFixed(4)}</div>
-                        <div style="height:4px; background:#eee; margin-top:5px;">
-                            <div style="height:100%; width:${barWidth}%; background:${color};"></div>
-                        </div>
-                    </div>`;
-            }
-        }
-        html += '</div>';
-        container.innerHTML += html;
-    }
-
+    initMainChart();
     setInterval(updateDashboard, 1000);
 </script>
 </body>
